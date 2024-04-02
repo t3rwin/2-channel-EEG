@@ -54,7 +54,7 @@ def rightClick(event):
     update_rec(right_bar)
     update_rec(left_bar)
 
-root.bind("<Button-1>", rightClick)
+root.bind("<Button-2>", rightClick)
 root.bind("<Button-3>", leftClick)
 
 root.mainloop()
