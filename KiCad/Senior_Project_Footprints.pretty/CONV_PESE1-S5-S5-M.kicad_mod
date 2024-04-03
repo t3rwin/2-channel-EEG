@@ -67,4 +67,9 @@
     (solder_mask_margin 0.102) (tstamp dcc2dae9-4f62-4476-acb9-a24c6279f2ca))
   (pad "8" smd rect (at 5.05 -3.81) (size 2.1 1) (layers "F.Cu" "F.Paste" "F.Mask")
     (solder_mask_margin 0.102) (tstamp bc79adcb-2e60-449c-aa2d-1537dfa5e7bb))
+  (model "/Users/timerwin/Downloads/PESE1-S5-S5-M-TR.STEP"
+    (offset (xyz 0 0 2.25))
+    (scale (xyz 1 1 1))
+    (rotate (xyz 0 0 90))
+  )
 )

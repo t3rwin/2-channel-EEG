@@ -40,4 +40,9 @@
     (solder_mask_margin 0.102) (tstamp 8ee4de56-d0a4-4d6f-ac63-13825a821bfe))
   (pad "3" smd rect (at -1.6 1) (size 1.2 1.2) (layers "F.Cu" "F.Paste" "F.Mask")
     (solder_mask_margin 0.102) (tstamp f1be1517-4509-4400-95ca-7b911e53bbe7))
+  (model "/Users/timerwin/Downloads/35WR10KLFTR--3DModel-STEP-205271.STEP"
+    (offset (xyz 0 0.2 4.55))
+    (scale (xyz 1 1 1))
+    (rotate (xyz 180 0 -90))
+  )
 )
