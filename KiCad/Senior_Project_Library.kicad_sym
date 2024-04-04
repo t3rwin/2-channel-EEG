@@ -46,7 +46,7 @@
     )
     (symbol "+3V3_nucleo_1_1"
       (pin power_in line (at 0 0 90) (length 0) hide
-        (name "+3.3V" (effects (font (size 1.27 1.27))))
+        (name "+3V3_nucleo" (effects (font (size 1.27 1.27))))
         (number "1" (effects (font (size 1.27 1.27))))
       )
     )
@@ -98,7 +98,7 @@
     )
     (symbol "+5V_iso_1_1"
       (pin power_in line (at 0 0 90) (length 0) hide
-        (name "+3.3V" (effects (font (size 1.27 1.27))))
+        (name "+5V_iso" (effects (font (size 1.27 1.27))))
         (number "1" (effects (font (size 1.27 1.27))))
       )
     )
@@ -512,7 +512,7 @@
     (property "Value" "ISO6763-Q1" (at -6.35 17.78 0)
       (effects (font (size 1.27 1.27)) (justify left))
     )
-    (property "Footprint" "Package_SO:QSOP-20_3.9x8.7mm_P0.635mm" (at 0 -17.78 0)
+    (property "Footprint" "Package_SO:SOIC-16W_7.5x10.3mm_P1.27mm" (at 0 -17.78 0)
       (effects (font (size 1.27 1.27) italic) hide)
     )
     (property "Datasheet" "https://www.ti.com/lit/ds/symlink/iso6760-q1.pdf" (at 0 29.21 0)
@@ -763,7 +763,7 @@
     (property "Value" "MCP3562R" (at -36.83 25.4 0)
       (effects (font (size 1.27 1.27)) (justify left))
     )
-    (property "Footprint" "Package_QFP:TQFP-52-1EP_10x10mm_P0.65mm_EP6.5x6.5mm" (at 0 -52.07 0)
+    (property "Footprint" "Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm" (at 0 -52.07 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "https://ww1.microchip.com/downloads/aemDocuments/documents/APID/ProductDocuments/DataSheets/MCP3561_2_4R-Data-Sheet-DS200006391C.pdf" (at -2.54 -57.15 0)
