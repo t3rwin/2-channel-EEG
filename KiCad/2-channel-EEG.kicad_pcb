@@ -58,6 +58,7 @@
       (dielectric_constraints no)
     )
     (pad_to_mask_clearance 0)
+    (aux_axis_origin 130.302 145.796)
     (pcbplotparams
       (layerselection 0x00010fc_ffffffff)
       (plot_on_all_layers_selection 0x0000000_00000000)
@@ -642,7 +643,7 @@
     (property "ki_keywords" "dual opamp")
     (path "/c946b703-8287-4088-8b8b-56b7f40b68f7")
     (attr smd)
-    (fp_text reference "U11" (at 0 0.071 90) (layer "F.SilkS")
+    (fp_text reference "U11" (at 0 0.071 90) (layer "F.SilkS") hide
         (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 5a258649-1200-45c0-a076-f61fe731baf7)
     )
@@ -650,7 +651,7 @@
         (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 3629496e-1fa2-46d8-b7de-7aa30499a8fb)
     )
-    (fp_text user "${REFERENCE}" (at -1.5 0.375 90) (layer "F.Fab")
+    (fp_text user "${REFERENCE}" (at 0 0.071 90) (layer "F.Fab")
         (effects (font (size 0.75 0.75) (thickness 0.11)))
       (tstamp 10a7b903-70cf-4f66-8996-e017f21e97ec)
     )
@@ -1692,7 +1693,7 @@
     (property "ki_keywords" "instrumentation amplifier")
     (path "/e150c18b-fd49-4459-ac17-6229e66dad55")
     (attr smd)
-    (fp_text reference "U2" (at 0 0 180) (layer "F.SilkS")
+    (fp_text reference "U2" (at 0 0 180) (layer "F.SilkS") hide
         (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 63db3510-7370-44cd-a4f2-7f3b67825f34)
     )
@@ -2684,7 +2685,7 @@
 
   (footprint "Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder" (layer "F.Cu")
     (tstamp 81c963ed-4875-48a5-b5cc-f9ae62686a92)
-    (at 137.922 100.584 90)
+    (at 137.922 100.584 -90)
     (descr "Resistor SMD 0805 (2012 Metric), square (rectangular) end terminal, IPC_7351 nominal with elongated pad for handsoldering. (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
     (tags "resistor handsolder")
     (property "Sheetfile" "2-channel-EEG.kicad_sch")
@@ -2721,9 +2722,9 @@
       (stroke (width 0.1) (type solid)) (layer "F.Fab") (tstamp f5c1c4c8-6795-4eee-9530-8d58af708f08))
     (fp_line (start 1 0.625) (end -1 0.625)
       (stroke (width 0.1) (type solid)) (layer "F.Fab") (tstamp 6f3761cb-1a89-42e7-bcbf-d1b3bef531e1))
-    (pad "1" smd roundrect (at -1 0 90) (size 1.2 1.4) (layers "F.Cu" "F.Paste" "F.Mask") (roundrect_rratio 0.2083333333)
+    (pad "1" smd roundrect (at -1 0 270) (size 1.2 1.4) (layers "F.Cu" "F.Paste" "F.Mask") (roundrect_rratio 0.2083333333)
       (net 53 "Net-(U9B--)") (pintype "passive") (tstamp 75a4306f-9d93-41bb-afe9-7336ea3be81f))
-    (pad "2" smd roundrect (at 1 0 90) (size 1.2 1.4) (layers "F.Cu" "F.Paste" "F.Mask") (roundrect_rratio 0.2083333333)
+    (pad "2" smd roundrect (at 1 0 270) (size 1.2 1.4) (layers "F.Cu" "F.Paste" "F.Mask") (roundrect_rratio 0.2083333333)
       (net 42 "Net-(U9A--)") (pintype "passive") (tstamp 82ac49fd-8a95-4ecc-b3bc-981bdc86fad4))
     (model "${KICAD6_3DMODEL_DIR}/Resistor_SMD.3dshapes/R_0805_2012Metric.wrl"
       (offset (xyz 0 0 0))
@@ -5384,7 +5385,7 @@
         (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 64628c24-114d-4609-9c4f-138d67f3cb2a)
     )
-    (fp_text user "${REFERENCE}" (at 1.524 -1.016) (layer "F.Fab")
+    (fp_text user "${REFERENCE}" (at -0.016 0) (layer "F.Fab")
         (effects (font (size 0.4 0.4) (thickness 0.06)))
       (tstamp 2472349a-070e-47ba-991c-4776823a2183)
     )
@@ -5434,7 +5435,7 @@
     (property "ki_keywords" "dual opamp")
     (path "/c3093901-2090-44c7-806e-21a45f802140")
     (attr smd)
-    (fp_text reference "U9" (at 0 0 180) (layer "F.SilkS")
+    (fp_text reference "U9" (at 0 0 180) (layer "F.SilkS") hide
         (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 03da88c5-c231-494a-af3e-9c7e402b8d19)
     )
