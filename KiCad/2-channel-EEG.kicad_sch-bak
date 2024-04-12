@@ -2063,6 +2063,7 @@
 
   (no_connect (at 177.8 135.89) (uuid 1ad49745-b030-4282-b219-704ddc555341))
   (no_connect (at 177.8 224.79) (uuid 53fc85b4-aa70-42e2-9966-7ed76a98d805))
+  (no_connect (at 336.55 96.52) (uuid 67f2b603-ebbb-4d14-91be-f0e757a43119))
 
   (wire (pts (xy 217.17 186.69) (xy 217.17 193.04))
     (stroke (width 0) (type default))
@@ -3521,6 +3522,14 @@
     (uuid f7e2192a-99aa-4fc2-91ee-baf867adb8d5)
   )
 
+  (text_box "check output current of opamps\ntraces under spi isolator?\nDRL resistor for gain\n\n"
+    (at 19.05 269.24 0) (size 24.13 12.7)
+    (stroke (width 0) (type default))
+    (fill (type none))
+    (effects (font (size 1.27 1.27)) (justify left top))
+    (uuid 1239f1dd-0b89-4026-8ad7-8c4681f07221)
+  )
+
   (text "Electrodes\n" (at 26.67 66.04 0)
     (effects (font (size 2 2) (color 0 0 0 1)) (justify left bottom))
     (uuid 21d54171-fcf6-4159-b2c0-caef5715f86d)
@@ -4813,7 +4822,7 @@
   (symbol (lib_id "Connector_Generic:Conn_01x06") (at 344.17 31.75 0) (unit 1)
     (in_bom yes) (on_board yes) (dnp no) (fields_autoplaced)
     (uuid 2cc55374-90ed-4fd5-b10c-96538c353b6a)
-    (property "Reference" "J11" (at 346.71 31.75 0)
+    (property "Reference" "J12" (at 346.71 31.75 0)
       (effects (font (size 1.27 1.27)) (justify left))
     )
     (property "Value" "MCU_Data" (at 346.71 34.29 0)
@@ -4834,7 +4843,7 @@
     (instances
       (project "2-channel-EEG"
         (path "/2b704768-8a56-4ae7-8429-c511e581618b"
-          (reference "J11") (unit 1)
+          (reference "J12") (unit 1)
         )
       )
     )
@@ -5101,7 +5110,7 @@
   (symbol (lib_id "Connector_Generic:Conn_01x06") (at 275.59 33.02 0) (unit 1)
     (in_bom yes) (on_board yes) (dnp no) (fields_autoplaced)
     (uuid 4604244a-0a30-48cf-be88-35a479959a62)
-    (property "Reference" "J9" (at 278.13 33.02 0)
+    (property "Reference" "J10" (at 278.13 33.02 0)
       (effects (font (size 1.27 1.27)) (justify left))
     )
     (property "Value" "ADC_Data" (at 278.13 35.56 0)
@@ -5122,7 +5131,7 @@
     (instances
       (project "2-channel-EEG"
         (path "/2b704768-8a56-4ae7-8429-c511e581618b"
-          (reference "J9") (unit 1)
+          (reference "J10") (unit 1)
         )
       )
     )
@@ -6180,7 +6189,7 @@
   (symbol (lib_id "Connector_Generic:Conn_01x01") (at 332.74 49.53 180) (unit 1)
     (in_bom yes) (on_board yes) (dnp no)
     (uuid 819af3da-7aa1-445f-9d77-1c37d88bb060)
-    (property "Reference" "J10" (at 332.74 43.18 0)
+    (property "Reference" "J11" (at 332.74 43.18 0)
       (effects (font (size 1.27 1.27)))
     )
     (property "Value" "ISO_IN_C" (at 332.74 45.72 0)
@@ -6196,7 +6205,7 @@
     (instances
       (project "2-channel-EEG"
         (path "/2b704768-8a56-4ae7-8429-c511e581618b"
-          (reference "J10") (unit 1)
+          (reference "J11") (unit 1)
         )
       )
     )
@@ -7079,7 +7088,7 @@
   (symbol (lib_id "Connector_Generic:Conn_01x03") (at 245.11 113.03 180) (unit 1)
     (in_bom yes) (on_board yes) (dnp no) (fields_autoplaced)
     (uuid b96666c1-f3b3-4bad-b357-6e0fc4893040)
-    (property "Reference" "J8" (at 245.11 104.14 0)
+    (property "Reference" "J14" (at 245.11 104.14 0)
       (effects (font (size 1.27 1.27)))
     )
     (property "Value" "Conn_01x03" (at 245.11 106.68 0)
@@ -7097,7 +7106,7 @@
     (instances
       (project "2-channel-EEG"
         (path "/2b704768-8a56-4ae7-8429-c511e581618b"
-          (reference "J8") (unit 1)
+          (reference "J14") (unit 1)
         )
       )
     )
