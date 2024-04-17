@@ -3,6 +3,7 @@ import numpy as np
 
 import matplotlib.animation as animation
 from matplotlib.lines import Line2D
+from scipy import fft
 
 
 class Scope:
@@ -54,6 +55,62 @@ class Scope:
         self.ax2.set_title("Filtered")
 
         return self.line2,self.line
+
+class FFT_Display:
+    def __init__(self, ax1, nsamp, fs):
+        self.ax1 = ax1
+        self.fs = fs
+        self.nsamp = nsamp
+        self.tdata = [0]
+        self.tdata_export = [0]
+        self.ydata = [0]
+        self.line = Line2D(self.tdata, self.ydata, marker='.',linestyle='-.')
+        # self.line.set_antialiased(True)
+        self.ax1.add_line(self.line)
+        self.ax1.set_ylim(0, 1)
+        self.ax1.set_xlim(0, self.nsamp)
+
+    def update(self, y):
+        # y2=.6
+        # lastt = self.tdata[-1]
+        # if lastt >= self.tdata[0] + self.nsamp:  # reset the arrays
+            # self.tdata_export.append(self.tdata)
+            # self.tdata = [self.tdata[-1]]
+            # self.ydata = [self.ydata[-1]]
+        F = np.array(fft.fftfreq(self.nsamp))
+        F = self.fs*F[0:int((len(F)+1)/2)]
+        index = (np.abs(F - 70)).argmin()
+        self.ax1.set_xlim(0, index)
+        self.ax1.set_xticks(F[0:index:10])
+        self.ax1.tick_params(axis='x', labelrotation=90)
+        self.ax1.set_xlabel('f(Hz)')
+        # print(f'index:{index}')
+        # print(f'freq:{F[index-3:index]}')
+        # print(f'F:{F}')
+
+        # self.ax1.figure.canvas.draw()
+
+        # This slightly more complex calculation avoids floating-point issues
+        # from just repeatedly adding `self.dt` to the previous value.
+        # t = self.tdata[0] + len(self.tdata) * self.dt
+        # t = list(range(0,self.nsamp))
+
+        # self.tdata.append(t)
+        # self.ydata.append(y)
+        # data = y[0:index]
+        data = np.array(y)
+        # print(len(data))
+        # print(index)
+        # self.line.set_data(list(range(0,len(data))),data)
+        self.line.set_data(F,data/max(y))
+
+
+        # self.line.set_label("CH1")
+        # self.ax.figure.legend()
+        # self.ax1.set_title("Unfiltered")
+        # self.ax2.set_title("Filtered")
+
+        return self.line,
 
 
 # def emitter(p=0.1):
