@@ -5,9 +5,8 @@ import matplotlib.animation as animation
 from matplotlib.lines import Line2D
 from scipy import fft
 
-
-class Power:
-    def __init__(self, ax1, maxt=30, dt=1):
+class Bar:
+    def __init__(self, ax1, maxt=1, dt=.5):
         self.ax1 = ax1
         self.dt = dt
         self.maxt = maxt
@@ -16,8 +15,39 @@ class Power:
         self.ydata = [0]
         self.line = Line2D(self.tdata, self.ydata,marker='.')
         self.ax1.add_line(self.line)
-        self.ax1.set_ylim(-1, 1)
+        self.ax1.set_ylim(0, 1)
         self.ax1.set_xlim(0, self.maxt)
+        self.b = self.ax1.bar(0,0)
+
+    def update(self, y):
+        self.ax1.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
+        self.ax1.figure.canvas.draw()
+        self.b.set_height(y)
+
+        # This slightly more complex calculation avoids floating-point issues
+        # from just repeatedly adding `self.dt` to the previous value.
+        # t = self.tdata[0] + len(self.tdata) * self.dt
+        
+        # self.line.set_data(self.tdata, self.ydata)
+        # self.line.set_data(self.tdata, self.ydata)
+        return self.b,
+
+class Power:
+    def __init__(self, ax1, maxt=30, dt=.5):
+        self.ax1 = ax1
+        self.dt = dt
+        self.maxt = maxt
+        self.tdata = [0]
+        self.tdata_export = [0]
+        self.ydata = [0]
+        self.line = Line2D(self.tdata, self.ydata,marker='.',linewidth=.5)
+        self.ax1.add_line(self.line)
+        self.ax1.set_ylim(0, 1)
+        self.ax1.set_xlim(0, self.maxt)
+
+        self.ydata2 = [0]
+        self.line2 = Line2D(self.tdata,self.ydata2,marker='+',color='black')
+        self.ax1.add_line(self.line2)
 
     def update(self, y):
         # y2=.6
@@ -27,6 +57,9 @@ class Power:
             self.tdata = [self.tdata[-1]]
             self.ydata = [self.ydata[-1]]
             self.ax1.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
+
+            self.ydata2 = [self.ydata2[-1]]
+
             self.ax1.figure.canvas.draw()
 
         # This slightly more complex calculation avoids floating-point issues
@@ -34,11 +67,13 @@ class Power:
         t = self.tdata[0] + len(self.tdata) * self.dt
             
         self.tdata.append(t)
-        self.ydata.append(y)
+        self.ydata.append(y[0])
+        self.ydata2.append(y[1])
         
         # self.line.set_data(self.tdata, self.ydata)
         self.line.set_data(self.tdata, self.ydata)
-        return self.line,
+        self.line2.set_data(self.tdata, self.ydata2)
+        return self.line,self.line2
 
 class Scope:
     def __init__(self, ax1, ax2=0, maxt=5, dt=.003):
