@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "QUEUE.h"
 
 UART_HandleTypeDef hlpuart1;
 
@@ -41,11 +42,33 @@ int main(void)
   parseADC(data, tx_buffer);
 
 
+  Queue q;
+  initQueue(&q);
+
+  enqueue(&q, 0xFFF);
+  enqueue(&q, 0xFFE);
+  enqueue(&q, 0xFFD);
+  enqueue(&q, 0xFFC);
+  enqueue(&q, 0xFFB);
+  enqueue(&q, 0xFFA);
+
+
   //transmit and receive
   while (1)
   {
+	  if(!(isEmpty(&q))){
+		  parseADC(peek(&q), tx_buffer);
+		  HAL_UART_Transmit(&hlpuart1, tx_buffer, 4, 20);
+		  dequeue(&q);
+	  }else{
+		  enqueue(&q, 0xFFF);
+		  enqueue(&q, 0xFFE);
+		  enqueue(&q, 0xFFD);
+		  enqueue(&q, 0xFFC);
+		  enqueue(&q, 0xFFB);
+		  enqueue(&q, 0xFFA);
+	  }
 	  HAL_UART_Receive_IT(&hlpuart1, rx_data, 1);
-	  HAL_UART_Transmit(&hlpuart1, tx_buffer, 4, 20);
 	  HAL_Delay(250);
   }
 }
