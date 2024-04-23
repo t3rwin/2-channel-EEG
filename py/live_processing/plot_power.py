@@ -11,6 +11,33 @@ import multiprocessing
 from multiprocessing import Queue
 from scipy.fft import fft,fftfreq
 
+import sys
+sys.path.append('../')
+import python_rx as prx
+
+def read_UART(q_volts, q_v):
+    serialInst = prx.serial.Serial()
+    prx.Port_Init(serialInst)
+    prx.Port_Init()
+    packet = []
+    while True: # probably need to change to while the usb port is open or something
+        if (prx.serialInst.inWaiting() > 0): 
+            #add to data read
+            packet.append(prx.serialInst.read())
+
+            #once full number is recieved print the value in: original 3 byte array, 
+            #concatinated 6 digit hex, and decimal values
+        if (len(packet) == 4):
+            # print(packet)
+            # print("{0:x}".format(byte2int(packet[:3])), byte2int(packet[:3]))
+            # print(prx.byte2int(packet[:3]))
+            # print(int.from_bytes(packet[3], byteorder='big'))
+            q_volts.put(prx.byte2int(packet[:3]))
+            q_v.put(prx.byte2int(packet[:3]))
+            #reset read value memory
+            packet = []
+    
+
 def send_data(volts: list, q_volts: Queue, q_v: Queue):
     """
     Saves data sample by sample onto the output queue. Includes a delay to simulate sampling rate.
@@ -71,6 +98,24 @@ def filt_data2(a,b,q_in,q_out,q_out2):
         x = q_in.get()
     q_out.put(STOP)
     q_out2.put(STOP)
+
+def filt_and_interpolate(a_smooth,b_smooth,a_int,b_int,q_in,q_out):
+    smooth_result = []
+    smooth_z= [0]*(len(b_smooth)-1)
+
+    int_result = []
+    int_z= [0]*(len(b_int)-1)
+    x = 0
+    while x != STOP:
+        smooth_val,smooth_z = filter([x],a_smooth,b_smooth,smooth_z)
+        smooth_result = smooth_val + [0]
+
+        int_val,int_z = filter(smooth_result,a_int,b_int,int_z)
+        for val in int_val:
+            q_out.put(val)
+        x = q_in.get()
+    q_out.put(STOP)
+    
 
 def wait_while_empty(q):
     while q.empty() is True:
@@ -183,12 +228,12 @@ def draw_signals(q_in_filt,q_in_raw,fs,f_refresh):
                                 blit=True,cache_frame_data=False, save_count=0,interval=int(1000/f_refresh))
     plt.show()
 
-def draw_fft(q_in,q_in2):
+def draw_fft(q_in):
     def emittera():
-        while (q_in.empty() and q_in2.empty()) is True:
+        while (q_in.empty()) is True:
             pass
-        yield [q_in.get(), q_in2.get()]
-
+        # yield [q_in.get(), q_in2.get()]
+        yield [q_in.get(),0]
     
     fig, ax1 = plt.subplots()
     fig.set_figheight(5)
@@ -200,7 +245,7 @@ def draw_fft(q_in,q_in2):
     # fig.set_figwidth(14)
     fft_display = Power(ax1)
     ani = animation.FuncAnimation(fig, fft_display.update, frames=emittera,
-                                blit=True,cache_frame_data=False, save_count=0,interval=window_time)
+                                blit=True,cache_frame_data=False, save_count=0,interval=window_time/4)
     plt.show()
 def draw_fft2(q_fft): # bar graph
     def emittera():
@@ -234,7 +279,6 @@ if __name__ == '__main__':
     # STOP = 9
     # fs = 1000
 
-
     # with np.load('40hz_lowpass_fs1k.npz') as data:
     with np.load('40-55-333hz_lowpass.npz') as data:
         ba_lowpass = data['ba']
@@ -248,6 +292,8 @@ if __name__ == '__main__':
     b_smooth = scipy.signal.savgol_coeffs(7,2)
     a_smooth = [0]*len(b_smooth)
     a_smooth[0] = 1
+
+    b_int = [-0.0928,0.0000,0.5862,1.0000,0.5862,0.0000,-0.0928] #from matlab intfilt(). p=l=2,a=0.5
 
     # data = pandas.read_csv('data_inputs/1open-4reading.csv')
     data = pandas.read_csv('data_inputs/1open-4reading-300.csv')
@@ -275,15 +321,16 @@ if __name__ == '__main__':
     graph = multiprocessing.Process(target=draw_signals,args=(q_volts_filt,q_v,fs,60))
     fs_fft = fs
     fft_p = multiprocessing.Process(target=fft_data,args=(q_filt_for_fft,q_fft_out,1,fs_fft))
-    graph_fft = multiprocessing.Process(target=draw_fft,args=(q_power_nofilt,q_power_filt))
-    filt_power = multiprocessing.Process(target=filt_data2,args=(a_smooth,b_smooth,q_fft_out,q_power_filt,q_power_nofilt))
+    graph_fft = multiprocessing.Process(target=draw_fft,args=(q_power_filt,))
+    # filt_power = multiprocessing.Process(target=filt_data2,args=(a_smooth,b_smooth,q_fft_out,q_power_filt,q_power_nofilt))
+    filt_power = multiprocessing.Process(target=filt_and_interpolate,args=(a_smooth,b_smooth,1,b_int,q_fft_out,q_power_filt))
     graph_bar_power = multiprocessing.Process(target=draw_fft2,args=(q_power_filt,))
-    graph_fft.start()
+    # graph_fft.start()
     # graph_bar_power.start()
     fft_p.start()
     send.start()
     filt.start()
-    filt_power.start()
+    # filt_power.start()
 
     graph.start()
     test = []
@@ -301,11 +348,11 @@ if __name__ == '__main__':
     send.join()
     # print('done send')
     filt.join()
-    fft_p.join()
+    # fft_p.join()
     # filt_power.join()
     # print('done filt')
     graph.join()
-    graph_fft.join()
+    # graph_fft.join()
     # graph_bar_power.join()
     print('done graph')
 
