@@ -6,7 +6,7 @@ import pandas
 import matplotlib.pyplot as plt
 import time
 from scopetest import *
-# import concurrent.futures
+import concurrent.futures
 import multiprocessing
 from multiprocessing import Queue
 from scipy.fft import fft,fftfreq
@@ -28,10 +28,8 @@ def read_UART(q_volts, q_v):
             #once full number is recieved print the value in: original 3 byte array, 
             #concatinated 6 digit hex, and decimal values
         if (len(packet) == 4):
-            q_volts.send(prx.byte2int(packet[:3]))
-            # q_volts.put(prx.byte2int(packet[:3]))
-            q_v.send(prx.byte2int(packet[:3]))
-            # q_v.put(prx.byte2int(packet[:3]))
+            q_volts.put(prx.byte2int(packet[:3]))
+            q_v.put(prx.byte2int(packet[:3]))
             #reset read value memory
             packet = []
     
@@ -46,14 +44,11 @@ def send_data(volts: list, q_volts: Queue, q_v: Queue):
         q_volts - Queue for filter function
         q_v     - Queue for raw volts graphing function
     """
+    time.sleep(2)
     for v in volts:
-        # q_volts.put(v)
-        # q_v.put(v)
         q_volts.send(v)
         q_v.send(v)
         time.sleep(.003)
-    # q_volts.put(STOP)
-    # q_v.put(STOP)
     q_volts.send(STOP)
     q_v.send(STOP)
 
@@ -95,11 +90,11 @@ def filt_data2(a,b,q_in,q_out,q_out2):
     while x != STOP:
         val,z = filter([x],a,b,z)
         result.append(val)
-        q_out.send(val[0])
-        q_out2.send(x)
-        x = q_in.recv()
-    q_out.send(STOP)
-    q_out2.send(STOP)
+        q_out.put(val[0])
+        q_out2.put(x)
+        x = q_in.get()
+    q_out.put(STOP)
+    q_out2.put(STOP)
 
 def filt_and_interpolate(a_smooth,b_smooth,a_int,b_int,q_in,q_out):
     smooth_result = []
@@ -116,15 +111,13 @@ def filt_and_interpolate(a_smooth,b_smooth,a_int,b_int,q_in,q_out):
         for value in smooth_result:
             int_val,int_z = filter([value],a_int,b_int,int_z)
             q_out.send(int_val[0])
-            # q_out.put(int_val[0])
 
-        # q_out.put(x)
         x = q_in.recv()
-    q_out.put(STOP)
+    q_out.send(STOP)
     
 
 def wait_while_empty(q):
-    while q.poll() is False:
+    while q.empty() is True:
         pass
     return
 
@@ -146,7 +139,6 @@ def fft_data(q_in, q_out,t_window,fs):
     read_val = 0
     size = n_window#2 ** round(math.log(NSAMP,2))
     window = np.hanning(size)
-    # window = [1]*size
     F = fs*np.array(fftfreq(size))
     alpha_index = [(np.abs(F - alpha_range[0])).argmin(),(np.abs(F - alpha_range[1])).argmin()]
     eeg_index = [(np.abs(F - theta_range[0])).argmin(),(np.abs(F - beta_range[1])).argmin()]
@@ -159,12 +151,12 @@ def fft_data(q_in, q_out,t_window,fs):
     
     # fill up buffer for one window lenght
     while len(data_buffer)<n_window-1:
-        if q_in.empty() is False:
+        if q_in.poll() is True:
             read_val = q_in.recv()
             data_buffer.append(read_val)
 
-    wait_while_empty(q_in)
-    # while (read_val:=q_in.get()) != STOP:
+    while q_in.poll() is False:
+        pass
     while (data_buffer[-1]!=STOP):
         data_buffer.append(q_in.recv())
         if count%n_overlap == 0: #ready for next block
@@ -176,7 +168,6 @@ def fft_data(q_in, q_out,t_window,fs):
                 ffts_offset = fft_of_block(windowed_data,size)
                 power_block = np.square(np.add(ffts_offset[0:n_overlap],ffts[n_overlap::]))
                 
-                # reset variables
                 data_buffer = data_buffer[i_begin:i_end]
                 count = 0
                 i_begin = 0
@@ -185,15 +176,13 @@ def fft_data(q_in, q_out,t_window,fs):
             alpha_power = np.sum(power_block[alpha_index[0]:alpha_index[1]+1])
             tot_power = np.sum(power_block[eeg_index[0]:eeg_index[1]+1])
             q_out.send(alpha_power/tot_power)
-            # print(power_block)
-            # q_out.send(power_block)
         i_begin +=1
         i_end +=1
         count += 1
         if data_buffer[-1]!=STOP:
-            wait_while_empty(q_in)
+            while q_in.poll() is False:
+                pass
     q_out.send(STOP)
-
 
 count = 0
 t0 = 0
@@ -205,24 +194,18 @@ def draw_signals(q_in_filt,q_in_raw,fs,f_refresh):
         samp_per_update = int(fs/f_refresh)
         out_raw = []
         out_filt = []
-
         done = False
         while not done:
             if count == 333:
                 t0 = time.time()
             if len(out_raw)<samp_per_update:
-                wait_while_empty(q_in_raw)
-                # while q_in_raw.poll() is False:
-                #     pass
+                while q_in_raw.poll() is False:
+                    pass
                 out_raw.append(q_in_raw.recv())
                 count = count + 1
-                # if q_in_raw.empty() is False:
-                    # out_raw.append(q_in_raw.recv())
-                # else:
-                    # out_raw.append(0)
             if len(out_filt)<samp_per_update:
-                if q_in_filt.empty() is False:
-                # r2 = q_in_filt.recv()
+                if q_in_filt.poll() is True:
+                # r2 = q_in_filt.get()
                     out_filt.append(q_in_filt.recv())
                 else:
                     # r2 = 0
@@ -248,8 +231,7 @@ def draw_fft(q_in):
     def emittera():
         while (q_in.empty()) is True:
             pass
-        # yield [q_in.recv(), q_in2.recv()]
-        yield [q_in.recv(),0]
+        yield [q_in.get(),0]
     
     fig, ax1 = plt.subplots()
     fig.set_figheight(5)
@@ -257,11 +239,8 @@ def draw_fft(q_in):
     ax1.set_title('Alpha Relative Power')
     ax1.set_xlabel('Time (s)')
     plt.grid()
-    # fig.set_figheight(3)
-    # fig.set_figwidth(14)
     fft_display = Power(ax1)
-    # ani = animation.FuncAnimation(fig, fft_display.update, frames=emittera,
-    #                             blit=True,cache_frame_data=False, save_count=0,interval=window_time/12)
+
     ani = animation.FuncAnimation(fig, fft_display.update, frames=emittera,
                                 blit=True,cache_frame_data=False, save_count=0,interval=.02)
     plt.show()
@@ -270,17 +249,16 @@ def draw_fft2(q_fft): # bar graph
 
         # while q_fft.empty() is True:
         #     pass
-        wait_while_empty(q_fft)
-        # while q_fft.poll() is False:
-        #     pass
+        while q_fft.poll() is False:
+            pass
 
         # if q_fft.empty() is False:
-        #     fft_frame = q_fft.recv()
+        #     fft_frame = q_fft.get()
         # else:
             # fft_frame =  0
         # yield fft_frame
 
-        # yield q_fft.recv()
+        # yield q_fft.get()
         yield q_fft.recv()
     
     fig, ax1 = plt.subplots()
@@ -301,8 +279,6 @@ fs = 333
 window_time = 1
 NSAMP = int(fs * window_time)
 if __name__ == '__main__':
-    # STOP = 9
-    # fs = 1000
 
     # with np.load('40hz_lowpass_fs1k.npz') as data:
     with np.load('40-55-333hz_lowpass.npz') as data:
@@ -329,87 +305,28 @@ if __name__ == '__main__':
     volts = data['0.034611']
     # volts = volts[0:(fs*20)]
 
-
-    # q_volts = multiprocessing.Queue() #raw volts
-    # q_volts_filt = multiprocessing.Queue() # filtered volts
-    # q_v = multiprocessing.Queue() # raw volts for plotting
-    # q_filt_for_fft = multiprocessing.Queue() # filtered volts for fft
-    # q_fft_out = multiprocessing.Queue() # filtered volts for fft
-    # q_power_filt = multiprocessing.Queue() # filtered power values
-    # q_power_nofilt = multiprocessing.Queue() # unfiltered power values
-
     print('starting')
 
-    # volts_rx, volts_tx = multiprocessing.Pipe()
-    # volts_filt_rx, volts_filt_tx = multiprocessing.Pipe()
-    # power_filt_rx, power_filt_tx = multiprocessing.Pipe()
-    # v_rx, v_tx = multiprocessing.Pipe()
-    # filt_for_fft_rx, filt_for_fft_tx = multiprocessing.Pipe()
-    # fft_out_rx, fft_out_tx = multiprocessing.Pipe()
-    # q_power_nofilt_rx, q_power_nofilt_tx = multiprocessing.Pipe()
-    delay=1
-    with multiprocessing.Manager() as manager:
-        volts_rx, volts_tx = multiprocessing.Pipe()
-        volts_filt_rx, volts_filt_tx = multiprocessing.Pipe()
-        power_filt_rx, power_filt_tx = multiprocessing.Pipe()
-        v_rx, v_tx = multiprocessing.Pipe()
-        filt_for_fft_rx, filt_for_fft_tx = multiprocessing.Pipe()
-        fft_out_rx, fft_out_tx = multiprocessing.Pipe()
-        q_power_nofilt_rx, q_power_nofilt_tx = multiprocessing.Pipe()
-        time.sleep(delay)
-        # q_volts = manager.Queue() #raw volts
-        # q_volts_filt = manager.Queue() # filtered volts
-        # q_v = manager.Queue() # raw volts for plotting
-        # q_filt_for_fft = manager.Queue() # filtered volts for fft
-        # q_fft_out = manager.Queue() # filtered volts for fft
-        # q_power_filt = manager.Queue() # filtered power values
-        # q_power_nofilt = manager.Queue() # unfiltered power values
+    power_filt_rx, power_filt_tx = multiprocessing.Pipe()
+    q_volts_rx, q_volts_tx = multiprocessing.Pipe()
+    q_v_rx, q_v_tx = multiprocessing.Pipe()
+    q_volts_filt_rx, q_volts_filt_tx = multiprocessing.Pipe()
+    q_filt_for_fft_rx, q_filt_for_fft_tx = multiprocessing.Pipe()
+    q_fft_out_rx, q_fft_out_tx = multiprocessing.Pipe()
 
-        with ProcessPoolExecutor(max_workers=None) as executor:
-            send = executor.submit(send_data,volts,volts_tx,v_tx)
-            time.sleep(delay)
+    with ProcessPoolExecutor(max_workers=None) as executor:
 
-            filter_data = executor.submit(filt_data,a_lowpass,b_lowpass,volts_rx,volts_filt_tx,filt_for_fft_tx)
-            time.sleep(delay)
-            graph_signals = executor.submit(draw_signals,volts_filt_rx,v_rx,fs,60)
-            time.sleep(delay)
-            fs_fft = fs
-            power_calc = executor.submit(fft_data,filt_for_fft_rx,fft_out_tx,1,fs_fft)
-            time.sleep(delay)
-            # graph_fft = executor.submit(draw_fft,q_power_filt)
+        graph_signals = executor.submit(draw_signals,q_volts_filt_rx,q_v_rx,fs,60)
 
-            # filt_power = executor.submit(filt_and_interpolate,a_smooth,b_smooth,1,b_int,q_fft_out,q_power_filt)
-            filt_power = executor.submit(filt_and_interpolate,a_smooth,b_smooth,1,b_int,fft_out_rx,power_filt_tx)
-            time.sleep(delay)
-            # graph_bar_power = executor.submit(draw_fft2,q_power_filt)
-            graph_bar_power = executor.submit(draw_fft2,power_filt_rx)
+        fs_fft = fs
+        power_calc = executor.submit(fft_data,q_filt_for_fft_rx,q_fft_out_tx,1,fs_fft)
 
-    # send = multiprocessing.Process(target=send_data,args=(volts,q_volts,q_v))
-    # filt = multiprocessing.Process(target=filt_data,args=(a_lowpass,b_lowpass,q_volts,q_volts_filt,q_filt_for_fft))
-    # graph = multiprocessing.Process(target=draw_signals,args=(q_volts_filt,q_v,fs,60))
-    # # graph = multiprocessing.Process(target=draw_signals,args=(q_volts,q_v,fs,60))
-    # fs_fft = fs
-    # fft_p = multiprocessing.Process(target=fft_data,args=(q_filt_for_fft,q_fft_out,1,fs_fft))
-    # graph_fft = multiprocessing.Process(target=draw_fft,args=(q_power_filt,))
-    # # filt_power = multiprocessing.Process(target=filt_data2,args=(a_smooth,b_smooth,q_fft_out,q_power_filt,q_power_nofilt))
-    # filt_power = multiprocessing.Process(target=filt_and_interpolate,args=(a_smooth,b_smooth,1,b_int,q_fft_out,q_power_filt))
-    # graph_bar_power = multiprocessing.Process(target=draw_fft2,args=(q_power_filt,))
-    # # graph_fft.start()
-    # graph_bar_power.start()
-    # send.start()
-    # fft_p.start()
-    # filt.start()
-    # filt_power.start()
+        # graph_fft = executor.submit(draw_fft,q_power_filt)
 
-    # graph.start()
-    # test = []
-    
-    # send.join()
-    # filt.join()
-    # # fft_p.join()
-    # # filt_power.join()
-    # # print('done filt')
-    # graph.join()
-    # graph_fft.join()
-    # graph_bar_power.join()
-    # print('done graph')
+        filt_power = executor.submit(filt_and_interpolate,a_smooth,b_smooth,1,b_int,q_fft_out_rx,power_filt_tx)
+        time.sleep(1)
+        graph_bar_power = executor.submit(draw_fft2,power_filt_rx)
+
+        filter_data = executor.submit(filt_data,a_lowpass,b_lowpass,    q_volts_rx,q_volts_filt_tx,q_filt_for_fft_tx)
+
+        send = executor.submit(send_data,volts,q_volts_tx,q_v_tx)
