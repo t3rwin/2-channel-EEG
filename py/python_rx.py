@@ -11,7 +11,7 @@ def Port_Init(serialInst):
 
     # val = input("Select Port: COM")
 
-    portVar = "/dev/cu.usbmodem103"
+    portVar = "/dev/cu.usbmodem1203"
     # for x in range(0,len(portsList)):
     #     if portsList[x].startswith("COM" + str(val)):
     #         portVar = "COM" + str(val)
@@ -45,6 +45,6 @@ if __name__ == '__main__':
             # print(packet)
             # print("{0:x}".format(byte2int(packet[:3])), byte2int(packet[:3]))
             print(byte2int(packet[:3]))
-            print(int.from_bytes(packet[3], byteorder='big'))
+            # print(int.from_bytes(packet[3], byteorder='big'))
             #reset read value memory
             packet = []

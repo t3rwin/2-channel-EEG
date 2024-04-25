@@ -33,7 +33,7 @@ class Bar:
         return self.b,
 
 class Power:
-    def __init__(self, ax1, maxt=30, dt=.5):
+    def __init__(self, ax1, maxt=30, dt=.25): #.125
         self.ax1 = ax1
         self.dt = dt
         self.maxt = maxt
@@ -76,7 +76,7 @@ class Power:
         return self.line,self.line2
 
 class Scope:
-    def __init__(self, ax1, ax2=0, maxt=5, dt=.003):
+    def __init__(self, ax1, ax2=0, maxt=2, dt=.003):
         self.ax1 = ax1
         # self.ax2 = ax2
         self.dt = dt
@@ -91,6 +91,7 @@ class Scope:
         self.ax1.add_line(self.line2)
         # self.ax2.add_line(self.line2)
         self.ax1.set_ylim(-1.65, 1.65)
+        # self.ax1.set_ylim(0, 3.5)
         # self.ax2.set_ylim(-1.65, 1.65)
         self.ax1.set_xlim(0, self.maxt)
         # self.ax2.set_xlim(0, self.maxt)

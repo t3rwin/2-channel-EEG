@@ -18,12 +18,11 @@ import python_rx as prx
 def read_UART(q_volts, q_v):
     serialInst = prx.serial.Serial()
     prx.Port_Init(serialInst)
-    prx.Port_Init()
     packet = []
     while True: # probably need to change to while the usb port is open or something
-        if (prx.serialInst.inWaiting() > 0): 
+        if (serialInst.inWaiting() > 0): 
             #add to data read
-            packet.append(prx.serialInst.read())
+            packet.append(serialInst.read())
 
             #once full number is recieved print the value in: original 3 byte array, 
             #concatinated 6 digit hex, and decimal values
@@ -108,11 +107,14 @@ def filt_and_interpolate(a_smooth,b_smooth,a_int,b_int,q_in,q_out):
     x = 0
     while x != STOP:
         smooth_val,smooth_z = filter([x],a_smooth,b_smooth,smooth_z)
-        smooth_result = smooth_val + [0]
+        smooth_result = np.append(smooth_val,0)
+        # smooth_result = np.append(smooth_result,0)
 
-        int_val,int_z = filter(smooth_result,a_int,b_int,int_z)
-        for val in int_val:
-            q_out.put(val)
+        for value in smooth_result:
+            int_val,int_z = filter([value],a_int,b_int,int_z)
+            q_out.put(int_val[0])
+
+        # q_out.put(x)
         x = q_in.get()
     q_out.put(STOP)
     
@@ -244,8 +246,10 @@ def draw_fft(q_in):
     # fig.set_figheight(3)
     # fig.set_figwidth(14)
     fft_display = Power(ax1)
+    # ani = animation.FuncAnimation(fig, fft_display.update, frames=emittera,
+    #                             blit=True,cache_frame_data=False, save_count=0,interval=window_time/12)
     ani = animation.FuncAnimation(fig, fft_display.update, frames=emittera,
-                                blit=True,cache_frame_data=False, save_count=0,interval=window_time/4)
+                                blit=True,cache_frame_data=False, save_count=0,interval=.02)
     plt.show()
 def draw_fft2(q_fft): # bar graph
     def emittera():
@@ -268,7 +272,7 @@ def draw_fft2(q_fft): # bar graph
         return bars
     
     ani = animation.FuncAnimation(fig, update, frames=emittera,
-                                blit=False,cache_frame_data=False, save_count=0,interval=window_time)
+                                blit=False,cache_frame_data=False, save_count=0,interval=.02)
     plt.show()
 
 STOP = 400
@@ -294,13 +298,16 @@ if __name__ == '__main__':
     a_smooth[0] = 1
 
     b_int = [-0.0928,0.0000,0.5862,1.0000,0.5862,0.0000,-0.0928] #from matlab intfilt(). p=l=2,a=0.5
+    # b_int = [0.0195,0.0220,-0.0000,-0.0980,-0.1216,0.0000,0.3938,0.7858,1.0000,0.7858,0.3938,0.0000,-0.1216,-0.0980,-0.0000,0.0220,0.0195]
 
     # data = pandas.read_csv('data_inputs/1open-4reading.csv')
-    data = pandas.read_csv('data_inputs/1open-4reading-300.csv')
+    # data = pandas.read_csv('data_inputs/1open-4reading-300.csv')
+    data = pandas.read_csv('data_inputs/1open-1closed-1open-2closedmusicrelax.csv')
     # volts = data['Channel 1 (V)']
-    volts = data['0.026325']
+    # volts = data['0.026325']
+    volts = data['0.034611']
     # volts = volts[0:(fs*20)]
-    volts_filt = 0#scipy.signal.lfilter(b_lowpass,a_lowpass,volts)
+
 
     q_volts = multiprocessing.Queue() #raw volts
     q_volts_filt = multiprocessing.Queue() # filtered volts
@@ -315,10 +322,12 @@ if __name__ == '__main__':
     #     send = executor.submit(send_data,volts,q_volts)
     #     # filt = executor.submit(filter_bysample(a_lowpass,b_lowpass,q_volts,q_volts_filt))
     #     # plotting = executor.submit(anim,q_volts,q_volts_filt)
+    # send = multiprocessing.Process(target=read_UART,args=(q_volts, q_v))
     send = multiprocessing.Process(target=send_data,args=(volts,q_volts,q_v))
     filt = multiprocessing.Process(target=filt_data,args=(a_lowpass,b_lowpass,q_volts,q_volts_filt,q_filt_for_fft))
     # t0 = time.time()
     graph = multiprocessing.Process(target=draw_signals,args=(q_volts_filt,q_v,fs,60))
+    # graph = multiprocessing.Process(target=draw_signals,args=(q_volts,q_v,fs,60))
     fs_fft = fs
     fft_p = multiprocessing.Process(target=fft_data,args=(q_filt_for_fft,q_fft_out,1,fs_fft))
     graph_fft = multiprocessing.Process(target=draw_fft,args=(q_power_filt,))
@@ -326,11 +335,11 @@ if __name__ == '__main__':
     filt_power = multiprocessing.Process(target=filt_and_interpolate,args=(a_smooth,b_smooth,1,b_int,q_fft_out,q_power_filt))
     graph_bar_power = multiprocessing.Process(target=draw_fft2,args=(q_power_filt,))
     # graph_fft.start()
-    # graph_bar_power.start()
-    fft_p.start()
+    graph_bar_power.start()
     send.start()
+    fft_p.start()
     filt.start()
-    # filt_power.start()
+    filt_power.start()
 
     graph.start()
     test = []
@@ -352,8 +361,8 @@ if __name__ == '__main__':
     # filt_power.join()
     # print('done filt')
     graph.join()
-    # graph_fft.join()
-    # graph_bar_power.join()
+    graph_fft.join()
+    graph_bar_power.join()
     print('done graph')
 
     # df = pandas.DataFrame(test)
