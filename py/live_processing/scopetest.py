@@ -45,9 +45,9 @@ class Power:
         self.ax1.set_ylim(0, 1)
         self.ax1.set_xlim(0, self.maxt)
 
-        self.ydata2 = [0]
-        self.line2 = Line2D(self.tdata,self.ydata2,marker='+',color='black')
-        self.ax1.add_line(self.line2)
+        # self.ydata2 = [0]
+        # self.line2 = Line2D(self.tdata,self.ydata2,marker='+',color='black')
+        # self.ax1.add_line(self.line2)
 
     def update(self, y):
         # y2=.6
@@ -58,7 +58,7 @@ class Power:
             self.ydata = [self.ydata[-1]]
             self.ax1.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
 
-            self.ydata2 = [self.ydata2[-1]]
+            # self.ydata2 = [self.ydata2[-1]]
 
             self.ax1.figure.canvas.draw()
 
@@ -67,13 +67,57 @@ class Power:
         t = self.tdata[0] + len(self.tdata) * self.dt
             
         self.tdata.append(t)
-        self.ydata.append(y[0])
-        self.ydata2.append(y[1])
+        self.ydata = y[0]
+        # self.ydata2.append(y[1])
+        # print(y)
         
         # self.line.set_data(self.tdata, self.ydata)
         self.line.set_data(self.tdata, self.ydata)
-        self.line2.set_data(self.tdata, self.ydata2)
-        return self.line,self.line2
+        # self.line2.set_data(self.tdata, self.ydata2)
+        return self.line,
+
+class Scope2:
+    def __init__(self, ax, q_in, maxt=30, dt=.166): #.125
+        self.ax = ax
+        self.q_in = q_in
+        self.dt = dt
+        self.maxt = maxt
+        self.tdata = [0]
+        self.tdata_export = [0]
+        self.ydata = [0]
+        self.line = Line2D(self.tdata, self.ydata,marker='.',linewidth=.5)
+        self.ax.add_line(self.line)
+        # self.ax.set_ylim(0, 1)
+        self.ax.set_xlim(0, self.maxt)
+
+    def update(self,_):
+        # y2=.6
+        lastt = self.tdata[-1]
+        if lastt >= self.tdata[0] + self.maxt:  # reset the arrays
+            self.tdata_export.append(self.tdata)
+            self.tdata = [self.tdata[-1]]
+            self.ydata = [self.ydata[-1]]
+            self.ax.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
+
+            # self.ydata2 = [self.ydata2[-1]]
+
+            self.ax.figure.canvas.draw()
+
+        # This slightly more complex calculation avoids floating-point issues
+        # from just repeatedly adding `self.dt` to the previous value.
+        t = self.tdata[0] + len(self.tdata) * self.dt
+            
+        self.tdata.append(t)
+        while self.q_in.poll() is False:
+            pass
+        recv = self.q_in.recv()
+        self.ydata.append(recv)
+        # print(recv)
+        
+        # self.line.set_data(self.tdata, self.ydata)
+        self.line.set_data(self.tdata, self.ydata)
+        # self.line2.set_data(self.tdata, self.ydata2)
+        return self.line,
 
 class Scope:
     def __init__(self, ax1, ax2=0, maxt=2, dt=.003):
