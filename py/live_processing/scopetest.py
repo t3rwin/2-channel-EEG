@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.animation as animation
 from matplotlib.lines import Line2D
 from scipy import fft
+from plot_power import STOP
 
 class Bar:
     def __init__(self, ax1, maxt=1, dt=.5):
@@ -76,7 +77,71 @@ class Power:
         # self.line2.set_data(self.tdata, self.ydata2)
         return self.line,
 
-class Scope2:
+class Scope_Signal:
+    def __init__(self, ax, q_in_filt, q_in_raw, samp_per_update, maxt=5, 
+                 dt=0.00176): #.003
+        self.ax = ax
+        self.q_in_raw = q_in_raw
+        self.q_in_filt = q_in_filt
+        self.samp_per_update = samp_per_update
+        self.dt = dt
+        self.maxt = maxt
+        self.tdata = [0]
+        self.tdata_export = [0]
+        self.ydata_raw = [0]
+        self.ydata_filt = [0]
+        self.line_raw = Line2D(self.tdata,self.ydata_raw,linewidth=1.5)
+        self.line_filt = Line2D(self.tdata,self.ydata_filt,linewidth=1.5)
+        # self.ax.add_line(self.line_raw)
+        self.ax.add_line(self.line_filt)
+        self.ax.set_ylim(-2, 2)
+        self.ax.set_xlim(0, self.maxt)
+        self.finished = False
+
+    def update(self,_):
+        lastt = self.tdata[-1]
+        if lastt >= self.tdata[0] + self.maxt:  # reset the arrays
+            self.tdata_export.append(self.tdata)
+            self.tdata = [self.tdata[-1]]
+            self.ydata_raw = [self.ydata_raw[-1]]
+            self.ydata_filt = [self.ydata_filt[-1]]
+            self.ax.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
+            self.ax.figure.canvas.draw()
+
+        out_raw = []
+        out_filt = []
+        done = False
+        while not done:
+            if len(out_raw)<self.samp_per_update:
+                while self.q_in_raw.poll() is False:
+                    pass
+                if self.finished == False:
+                    data = self.q_in_raw.recv()
+                    out_raw.append(data)
+                    if data == STOP:
+                        self.finished = True
+                else:
+                    out_raw.append(0)
+                t = self.tdata[0] + len(self.tdata) * self.dt
+                self.tdata.append(t)
+            if len(out_filt)<self.samp_per_update:
+                # while self.q_in_filt.poll() is False:
+                #     pass
+                if self.finished == False:
+                    out_filt.append(self.q_in_filt.recv())
+                else:
+                    out_filt.append(0)
+            if (len(out_raw)==self.samp_per_update) and (len(out_filt)==self.samp_per_update):
+                done = True
+        self.ydata_raw = self.ydata_raw + out_raw
+        self.ydata_filt = self.ydata_filt + out_filt
+
+        self.line_raw.set_data(self.tdata, self.ydata_raw)
+        self.line_filt.set_data(self.tdata, self.ydata_filt)
+        # return self.line_filt,
+        yield self.line_raw
+
+class Scope_Power:
     def __init__(self, ax, q_in, maxt=30, dt=.166): #.125
         self.ax = ax
         self.q_in = q_in
@@ -89,6 +154,7 @@ class Scope2:
         self.ax.add_line(self.line)
         # self.ax.set_ylim(0, 1)
         self.ax.set_xlim(0, self.maxt)
+        self.stopped = False
 
     def update(self,_):
         # y2=.6
@@ -110,8 +176,15 @@ class Scope2:
         self.tdata.append(t)
         while self.q_in.poll() is False:
             pass
-        recv = self.q_in.recv()
-        self.ydata.append(recv)
+        if self.stopped == False:
+            recv = self.q_in.recv()
+            if STOP in recv:
+                self.stopped = True
+            self.ydata.append(recv[0])
+        if self.stopped:
+            self.ydata.append(0)
+            
+
         # print(recv)
         
         # self.line.set_data(self.tdata, self.ydata)
@@ -131,7 +204,7 @@ class Scope:
         self.ydata2 = [0]
         self.line = Line2D(self.tdata, self.ydata)
         # self.line.set_antialiased(True)
-        self.line2 = Line2D(self.tdata, self.ydata2)
+        self.line2 = Line2D(self.tdata, self.ydata2,marker='.')
         self.ax1.add_line(self.line2)
         # self.ax2.add_line(self.line2)
         self.ax1.set_ylim(-1.65, 1.65)
