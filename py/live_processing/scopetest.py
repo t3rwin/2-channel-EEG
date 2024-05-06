@@ -78,24 +78,27 @@ class Power:
         return self.line,
 
 class Scope_Signal:
-    def __init__(self, ax, q_in_filt, q_in_raw, samp_per_update, maxt=5, 
+    def __init__(self, ax1, ax2, CH1_in, CH2_in, samp_per_update, maxt=5, 
                  dt=0.00176): #.003
-        self.ax = ax
-        self.q_in_raw = q_in_raw
-        self.q_in_filt = q_in_filt
+        self.ax1 = ax1
+        self.ax2 = ax2
+        self.CH1_in = CH1_in
+        self.CH2_in = CH2_in
         self.samp_per_update = samp_per_update
         self.dt = dt
         self.maxt = maxt
         self.tdata = [0]
         self.tdata_export = [0]
-        self.ydata_raw = [0]
-        self.ydata_filt = [0]
-        self.line_raw = Line2D(self.tdata,self.ydata_raw,linewidth=1.5)
-        self.line_filt = Line2D(self.tdata,self.ydata_filt,linewidth=1.5)
-        # self.ax.add_line(self.line_raw)
-        self.ax.add_line(self.line_filt)
-        self.ax.set_ylim(-2, 2)
-        self.ax.set_xlim(0, self.maxt)
+        self.ydata_CH1 = [0]
+        self.ydata_CH2 = [0]
+        self.line_CH1 = Line2D(self.tdata,self.ydata_CH1,linewidth=1.5)
+        # self.line_CH2 = Line2D(self.tdata,self.ydata_CH2,linewidth=1.5)
+        self.ax1.add_line(self.line_CH1)
+        # self.ax2.add_line(self.line_CH2)
+        self.ax1.set_ylim(-2, 2)
+        # self.ax2.set_ylim(-2, 2)
+        self.ax1.set_xlim(0, self.maxt)
+        # self.ax2.set_xlim(0, self.maxt)
         self.finished = False
 
     def update(self,_):
@@ -103,43 +106,48 @@ class Scope_Signal:
         if lastt >= self.tdata[0] + self.maxt:  # reset the arrays
             self.tdata_export.append(self.tdata)
             self.tdata = [self.tdata[-1]]
-            self.ydata_raw = [self.ydata_raw[-1]]
-            self.ydata_filt = [self.ydata_filt[-1]]
-            self.ax.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
-            self.ax.figure.canvas.draw()
+            self.ydata_CH1 = [self.ydata_CH1[-1]]
+            self.ydata_CH2 = [self.ydata_CH2[-1]]
+            self.ax1.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
+            self.ax1.figure.canvas.draw()
 
-        out_raw = []
-        out_filt = []
+        out_CH1 = []
+        out_CH2 = []
         done = False
         while not done:
-            if len(out_raw)<self.samp_per_update:
-                while self.q_in_raw.poll() is False:
+            if len(out_CH1)<self.samp_per_update:
+                while self.CH1_in.poll() is False:
                     pass
                 if self.finished == False:
-                    data = self.q_in_raw.recv()
-                    out_raw.append(data)
-                    if data == STOP:
+                    data1 = self.CH1_in.recv()
+                    # data2 = self.CH2_in.recv()
+                    out_CH1.append(data1)
+                    # out_CH2.append(data2)
+                    if data1 == STOP:
                         self.finished = True
                 else:
-                    out_raw.append(0)
+                    out_CH1.append(0)
+                    # out_CH2.append(0)
                 t = self.tdata[0] + len(self.tdata) * self.dt
                 self.tdata.append(t)
-            if len(out_filt)<self.samp_per_update:
-                # while self.q_in_filt.poll() is False:
-                #     pass
-                if self.finished == False:
-                    out_filt.append(self.q_in_filt.recv())
-                else:
-                    out_filt.append(0)
-            if (len(out_raw)==self.samp_per_update) and (len(out_filt)==self.samp_per_update):
+            # if len(out_CH2)<self.samp_per_update:
+            #     # while self.CH2_in.poll() is False:
+            #     #     pass
+            #     if self.finished == False:
+            #         out_CH2.append(self.CH2_in.recv())
+            #     else:
+            #         out_CH2.append(0)
+            # if (len(out_CH1)==self.samp_per_update) and (len(out_CH2)==self.samp_per_update):
+            if (len(out_CH1)==self.samp_per_update):
                 done = True
-        self.ydata_raw = self.ydata_raw + out_raw
-        self.ydata_filt = self.ydata_filt + out_filt
+        self.ydata_CH1 = self.ydata_CH1 + out_CH1
+        # self.ydata_CH2 = self.ydata_CH2 + out_CH2
 
-        self.line_raw.set_data(self.tdata, self.ydata_raw)
-        self.line_filt.set_data(self.tdata, self.ydata_filt)
-        # return self.line_filt,
-        yield self.line_raw
+        self.line_CH1.set_data(self.tdata, self.ydata_CH1)
+        # self.line_CH2.set_data(self.tdata, self.ydata_CH2)
+        # return self.line_CH2,
+        # yield self.line_CH1,self.line_CH2
+        yield self.line_CH1,
 
 class Scope_Power:
     def __init__(self, ax, q_in, maxt=30, dt=.166): #.125
