@@ -78,27 +78,29 @@ class Power:
         return self.line,
 
 class Scope_Signal:
-    def __init__(self, ax1, ax2, CH1_in, CH2_in, samp_per_update, maxt=5, 
+    def __init__(self, ax1, ax2, CH1_in, samp_per_update, maxt=5, 
                  dt=0.00176): #.003
         self.ax1 = ax1
         self.ax2 = ax2
+
         self.CH1_in = CH1_in
-        self.CH2_in = CH2_in
+        # self.CH2_in = CH2_in
+
         self.samp_per_update = samp_per_update
         self.dt = dt
         self.maxt = maxt
         self.tdata = [0]
         self.tdata_export = [0]
         self.ydata_CH1 = [0]
-        self.ydata_CH2 = [0]
+        # self.ydata_CH2 = [0]
         self.line_CH1 = Line2D(self.tdata,self.ydata_CH1,linewidth=1.5)
         # self.line_CH2 = Line2D(self.tdata,self.ydata_CH2,linewidth=1.5)
         self.ax1.add_line(self.line_CH1)
         # self.ax2.add_line(self.line_CH2)
-        self.ax1.set_ylim(-2, 2)
-        # self.ax2.set_ylim(-2, 2)
+        self.ax1.set_ylim(-1, 1)
+        self.ax2.set_ylim(-2, 2)
         self.ax1.set_xlim(0, self.maxt)
-        # self.ax2.set_xlim(0, self.maxt)
+        self.ax2.set_xlim(0, self.maxt)
         self.finished = False
 
     def update(self,_):
@@ -107,12 +109,14 @@ class Scope_Signal:
             self.tdata_export.append(self.tdata)
             self.tdata = [self.tdata[-1]]
             self.ydata_CH1 = [self.ydata_CH1[-1]]
-            self.ydata_CH2 = [self.ydata_CH2[-1]]
+            # self.ydata_CH2 = [self.ydata_CH2[-1]]
             self.ax1.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
             self.ax1.figure.canvas.draw()
+            # self.ax2.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
+            # self.ax2.figure.canvas.draw()
 
         out_CH1 = []
-        out_CH2 = []
+        # out_CH2 = []
         done = False
         while not done:
             if len(out_CH1)<self.samp_per_update:
@@ -120,6 +124,7 @@ class Scope_Signal:
                     pass
                 if self.finished == False:
                     data1 = self.CH1_in.recv()
+                    print(data1)
                     # data2 = self.CH2_in.recv()
                     out_CH1.append(data1)
                     # out_CH2.append(data2)
@@ -130,24 +135,37 @@ class Scope_Signal:
                     # out_CH2.append(0)
                 t = self.tdata[0] + len(self.tdata) * self.dt
                 self.tdata.append(t)
-            # if len(out_CH2)<self.samp_per_update:
-            #     # while self.CH2_in.poll() is False:
-            #     #     pass
-            #     if self.finished == False:
-            #         out_CH2.append(self.CH2_in.recv())
-            #     else:
-            #         out_CH2.append(0)
-            # if (len(out_CH1)==self.samp_per_update) and (len(out_CH2)==self.samp_per_update):
             if (len(out_CH1)==self.samp_per_update):
                 done = True
+
+
         self.ydata_CH1 = self.ydata_CH1 + out_CH1
         # self.ydata_CH2 = self.ydata_CH2 + out_CH2
-
         self.line_CH1.set_data(self.tdata, self.ydata_CH1)
         # self.line_CH2.set_data(self.tdata, self.ydata_CH2)
         # return self.line_CH2,
         # yield self.line_CH1,self.line_CH2
-        yield self.line_CH1,
+        return self.line_CH1,
+
+        # ONE CHANNEL
+        # if len(out_CH1)<self.samp_per_update:
+        #         while self.CH1_in.poll() is False:
+        #             pass
+        #         if self.finished == False:
+        #             data1 = self.CH1_in.recv()
+        #             print(data1)
+        #             # data2 = self.CH2_in.recv()
+        #             out_CH1.append(data1)
+        #             # out_CH2.append(data2)
+        #             if data1 == STOP:
+        #                 self.finished = True
+        #         else:
+        #             out_CH1.append(0)
+        #             # out_CH2.append(0)
+        #         t = self.tdata[0] + len(self.tdata) * self.dt
+        #         self.tdata.append(t)
+        #     if (len(out_CH1)==self.samp_per_update):
+        #         done = True
 
 class Scope_Power:
     def __init__(self, ax, q_in, maxt=30, dt=.166): #.125
