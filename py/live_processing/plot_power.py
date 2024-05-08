@@ -5,9 +5,8 @@ import csv
 import pandas
 import matplotlib.pyplot as plt
 import time
-from scopetest import *
+from live_display import *
 import multiprocessing
-from multiprocessing import Queue
 from scipy.fft import fft,fftfreq
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
@@ -24,7 +23,7 @@ def current_timestamp():
     timestamp = now.strftime("%Y-%m-%d %H_%M_%S")
     return timestamp
 
-def read_UART(CH1_out1, CH1_out2, CH1_out_csv):
+def read_UART(CH1_out1, CH1_out2, CH2_out1):
 # def read_UART():
     """
     Reads data coming in from UART connection and outputs the unfiltered 
@@ -47,13 +46,16 @@ def read_UART(CH1_out1, CH1_out2, CH1_out_csv):
             val = prx.byte2int(packet[1::])
             channel = int.from_bytes(packet[0], byteorder='big') #16 = ch 1
             volts = ((val*2.4)/8388608)-1.65
-            print(channel,volts)
+            # print(channel,volts)
             if channel == 0:
-                CH1_out1.send(volts)
-                CH1_out2.send(volts)
-                CH1_out_csv.send(volts)
+                CH1_out1.send(volts) # for raw
+                CH1_out2.send(volts)      # for filtered
+                # CH1_out2.send(volts)
+                # CH1_out_csv.send(volts)
             # if channel == 16:
-            #     CH2_out1.send(volts)
+            else:
+                CH2_out1.send(volts)
+                # print(channel)
             #     CH2_out2.send(volts)
                 # print(volts)
             #reset read value memory
@@ -74,8 +76,7 @@ def csv_save(raw_rx):
         wait_while_empty(raw_rx)
     print(f'Done writing to file {file_path}')
 
-
-def send_data(volts, q_out1, q_out2, q_out_csv):
+def send_data(volts, q1, q2, q3):
     """
     Saves data sample by sample onto the output queue. Includes a delay to simulate sampling rate.
     Run in a parallel process. 
@@ -85,17 +86,16 @@ def send_data(volts, q_out1, q_out2, q_out_csv):
         q_out1 - Queue for filter function
         q_out2     - Queue for raw volts graphing function
     """
-    time.sleep(2)
+    # time.sleep(2)
     for v in volts:
-        q_out1.send(v)
-        q_out2.send(v)
-        q_out_csv.send(v)
-        time.sleep(.003)
+        q1.send(v)
+        q2.send(v)
+        q3.send(v)
+        time.sleep(.001)
         # time.sleep(1)
         # print(v)
         # time.sleep(1)
-    q_out1.send(STOP)
-    q_out2.send(STOP)
+    # q_out.send(STOP)
     print("STOP")
 
 def filter(data,a,b,z):
@@ -113,6 +113,7 @@ def filter(data,a,b,z):
 
 
 # def filt_data(a,b,q_in,q_out,q_out2):
+# def filt_data(a,b,CH1_in,CH1_out,CH1_out2):
 def filt_data(a,b,CH1_in,CH1_out,CH1_out2):
     """
     Filters incoming data according to a and b coefficients.
@@ -125,9 +126,11 @@ def filt_data(a,b,CH1_in,CH1_out,CH1_out2):
         val,z = filter([x],a,b,z)
         CH1_out.send(val[0])
         CH1_out2.send(val[0])
+        # CH1_out2.send(val[0])
+        wait_while_empty(CH1_in)
         x = CH1_in.recv()
     CH1_out.send(STOP)
-    CH1_out2.send(STOP)
+    # CH1_out2.send(STOP)
 
 
 def filt_and_interpolate(a_smooth,b_smooth,a_int,b_int,q_in,q_out):
@@ -138,27 +141,35 @@ def filt_and_interpolate(a_smooth,b_smooth,a_int,b_int,q_in,q_out):
     x = q_in.recv()
     smooth_z = np.zeros(shape=(len(x),len(b_smooth)-1))
     int_z= np.zeros(shape=(len(x),len(b_int)-1))
-    results = np.zeros(shape=(len(x),3))
+    # results = np.zeros(shape=(len(x),3))
+    results = [0,0,0] # for no interpolation
 
     while x != STOP:
+        # q_out.send(x)
+        # x = q_in.recv()
         for i in range(len(x)):
             smooth_val,smooth_z[i] = filter([x[i]],a_smooth,b_smooth,smooth_z[i])
-            smooth_result = np.append(smooth_val,0)
-            smooth_result = np.append(smooth_result,0)
+            # smooth_result = np.append(smooth_val,0)
+            # smooth_result = np.append(smooth_result,0)
+            # smooth_result = smooth_val
 
         # -------- no interpolation -------- #
-            # results[i] = smooth_val
-        #     print(f'smooth_val={smooth_val}')
-        #     print('')
+            results[i] = smooth_val[0]
+            q_out.send(results)
+            # print(f'smooth_val={smooth_val}')
+            # print('')
         # q_out.send(results[:,0])
         # q_out.send(results[:,0])
 
         # -------- interpolate -------- #
-        for count, value in enumerate(smooth_result):
-            int_val,int_z[i] = filter([value],a_int,b_int,int_z[i])
-            results[i][count] = int_val[0]
-        for i in range(len(results[0])):
-            q_out.send(results[:,i])
+            # for count, value in enumerate(smooth_result):
+            #     int_val,int_z[i] = filter([value],a_int,b_int,int_z[i])
+            #     results[i][count] = int_val[0]
+            #     print(int_val)
+        
+        # for i in range(len(results[0])):
+        #     q_out.send(results[:,i])
+            # print(results)
 
         x = q_in.recv()
     q_out.send([STOP]*3)
@@ -179,7 +190,7 @@ def calculate_powers(CH1_in, out,t_window,fs):
     # Frequency Bands
     alpha_range = [8,12]
     beta_range = [12,30]
-    theta_range = [4,6]
+    theta_range = [4,8]
 
     if (n_window:=int(t_window*fs))%2:
         # ensures window size is even
@@ -244,19 +255,19 @@ def calculate_powers(CH1_in, out,t_window,fs):
 
 count = 0
 t0 = 0
-def draw_signals(CH1_in_filt,CH1_in_raw,fs,f_refresh): 
-    CH1_in = CH1_in_raw
-    CH2_in = CH1_in_filt
-    # samp_per_update = 1
+def draw_signals(CH1_in,CH2_in,fs,f_refresh): 
+    # CH2_in = 0
     samp_per_update = int(fs/f_refresh)
-    # fig, (ax1,ax2) = plt.subplots(2,1)
-    fig, ax1 = plt.subplots()
+    fig, (ax1,ax2) = plt.subplots(2,1)
+    # fig, ax1 = plt.subplots()
     fig.set_figheight(3)
-    fig.set_figwidth(14)
-    plt.grid()
-    scope = Scope_Signal(ax1,CH1_in,CH2_in,samp_per_update)
+    fig.set_figwidth(10)
+    # plt.grid()
+    ax1.set_title('Channel 1')
+    ax2.set_title('Channel 2')
+    scope = Scope_Signal(fig,ax1,ax2,CH1_in,CH2_in,samp_per_update)
     ani = animation.FuncAnimation(fig, scope.update,
-                                blit=False, cache_frame_data=False, save_count=0,interval=int(1000/(f_refresh*1.5)))
+                                blit=True, cache_frame_data=False, save_count=0,interval=int(1000/(f_refresh*1.5)))
     # ani = animation.FuncAnimation(fig, scope.update,
                             # blit=False, cache_frame_data=False, save_count=0,interval=0)
 
@@ -271,16 +282,19 @@ def draw_power(q_in):
     # ax1.set_ylim(0, 1)
     # ax1.set_xlim(0, maxt)
     plt.grid()
-    fft_display = Scope_Power(ax1,q_in,maxt=30,dt=.166)
+    # fft_display = Scope_Power(ax1,q_in,maxt=30,dt=.166)
+    fft_display = Scope_Power(ax1,q_in,maxt=30,dt=.5)
 
-    ani = animation.FuncAnimation(fig, fft_display.update, blit=False,cache_frame_data=False, save_count=0,interval=160)
+    ani = animation.FuncAnimation(fig, fft_display.update, blit=True,cache_frame_data=False, save_count=0,interval=160)#160
     plt.show()
 
 def draw_power_bars(q_in): # bar graph
     fig, ax1 = plt.subplots()
+    fig.set_figheight(4)
+    fig.set_figwidth(4)
     ax1.set_ylim(0,1)
     bar_positions = [0,1,2]
-    colors = ['slategrey','cornflowerblue','salmon']
+    colors = ['lightsteelblue','#8f99fb','salmon']
     # bar_positions = [0]
     bars = ax1.bar(bar_positions,[0]*len(bar_positions),color=colors)
     labels = ['alpha', 'beta','theta']
@@ -299,6 +313,18 @@ def draw_power_bars(q_in): # bar graph
                                 blit=True,cache_frame_data=False, save_count=0,interval=160)
     plt.show()
 
+def eat_pipe(*qin):
+    while True:
+        for q in qin:
+            if q.poll() is True:
+                a = q.recv()
+        # if q1.poll() is True:
+        #     a = q1.recv()
+        # if q2.poll() is True:
+        #     a = q2.recv()
+            # print(a)
+
+
 STOP = 400
 # fs = 333
 fs = 566
@@ -309,6 +335,7 @@ if __name__ == '__main__':
 
     # with np.load('40hz_lowpass_fs1k.npz') as data:
     with np.load('40-55-333hz_lowpass.npz') as data:
+    # with np.load('566fs_lowpass.npz') as data:
         ba_lowpass = data['ba']
 
     b_lowpass = []
@@ -323,6 +350,8 @@ if __name__ == '__main__':
 
     # b_int = [-0.0928,0.0000,0.5862,1.0000,0.5862,0.0000,-0.0928] #from matlab intfilt(). p=l=2,a=0.5
     b_int = [0.0195,0.0220,-0.0000,-0.0980,-0.1216,0.0000,0.3938,0.7858,1.0000,0.7858,0.3938,0.0000,-0.1216,-0.0980,-0.0000,0.0220,0.0195]
+    a_int = [0]*len(b_int)
+    a_int[0] = 1
 
     # data = pandas.read_csv('data_inputs/1open-4reading.csv')
     # data = pandas.read_csv('data_inputs/1open-4reading-300.csv')
@@ -334,32 +363,71 @@ if __name__ == '__main__':
 
     print('starting')
 
-    CH1_power_filt_rx, CH1_power_filt_tx = multiprocessing.Pipe()
-    CH1_volts_rx, CH1_volts_tx = multiprocessing.Pipe()
-    CH1_v_rx, CH1_v_tx = multiprocessing.Pipe()
-    CH1_volts_filt_rx, CH1_volts_filt_tx = multiprocessing.Pipe()
-    CH1_filt_for_fft_rx, CH1_filt_for_fft_tx = multiprocessing.Pipe()
-    fft_out_rx, fft_out_tx = multiprocessing.Pipe()
-    
+    # CH1_power_filt_rx, CH1_power_filt_tx = multiprocessing.Pipe()
+    # CH1_volts_rx, CH1_volts_tx = multiprocessing.Pipe()
+    # CH1_v_rx, CH1_v_tx = multiprocessing.Pipe()
+    # CH1_volts_filt_rx, CH1_volts_filt_tx = multiprocessing.Pipe()
+    # CH1_filt_for_fft_rx, CH1_filt_for_fft_tx = multiprocessing.Pipe()
+    # fft_out_rx, fft_out_tx = multiprocessing.Pipe()
+    # csv_raw_rx, csv_raw_tx = multiprocessing.Pipe()
 
-    csv_raw_rx, csv_raw_tx = multiprocessing.Pipe()
+    CH1_rx, CH1_tx = multiprocessing.Pipe()
+    CH2_rx, CH2_tx = multiprocessing.Pipe()
+
+    CH1_to_filt_rx, CH1_to_filt_tx = multiprocessing.Pipe()
+    CH1_filtered_rx, CH1_filtered_tx = multiprocessing.Pipe()
+    CH1_for_power_rx, CH1_for_power_tx = multiprocessing.Pipe()
+    power_calc_rx, power_calc_tx = multiprocessing.Pipe()
+    power_filtered_rx, power_filtered_tx = multiprocessing.Pipe()
 
     with ProcessPoolExecutor(max_workers=None) as executor:
 
-        graph_signals = executor.submit(draw_signals,CH1_volts_filt_rx,CH1_v_rx,fs,60)
+        
+        graph_power = executor.submit(draw_power_bars,power_filtered_rx)
+        # graph_power = executor.submit(draw_power_bars,power_calc_rx)
+        # graph_power = executor.submit(draw_power,power_filtered_rx)
+        # graph_power = executor.submit(draw_power,power_calc_rx)
+        time.sleep(4)
+        graph_signals = executor.submit(draw_signals,CH1_filtered_rx,CH2_rx,fs,60)
+        filter_data = executor.submit(filt_data,a_lowpass,b_lowpass,CH1_to_filt_rx,CH1_filtered_tx,CH1_for_power_tx)
+
+        power_calc = executor.submit(calculate_powers,CH1_for_power_rx,power_calc_tx,1,fs)
+        filt_power = executor.submit(filt_and_interpolate,a_smooth,b_smooth,a_int,b_int,power_calc_rx,power_filtered_tx)
+
+        eat = executor.submit(eat_pipe,CH1_rx)#,power_calc_rx)
+        send_signals = executor.submit(read_UART,CH1_tx,CH1_to_filt_tx,CH2_tx)
+        # send_signals = executor.submit(send_data,volts,CH1_tx,CH1_to_filt_tx,CH2_tx)
+        time.sleep(3)
+
+
+        # graphing_done = False
+        # signals_done = False
+        # power_done = False
+        # while graphing_done == False:
+        #     if graph_signals.done():
+        #         eat2 = executor.submit(eat_pipe,CH1_filtered_rx,CH2_rx)
+        #     if graph_power.done():
+        #         eat3 = executor.submit(eat_pipe,power_calc_rx)
+        #     if graph_signals.done() and graph_power.done():
+        #         graphing_done = True
+        # print('done graph')
+        # time.sleep(10)
+        
+
+        # graph_signals = executor.submit(draw_signals,CH1_volts_filt_rx,CH1_v_rx,fs,60)
 
         fs_fft = fs
-        power_calc = executor.submit(calculate_powers,CH1_filt_for_fft_rx,fft_out_tx,1,fs_fft)
+        # power_calc = executor.submit(calculate_powers,CH1_filt_for_fft_rx,fft_out_tx,1,fs_fft)
         # graph_bar_power = executor.submit(draw_power_bars,power_filt_rx)
-        graph_fft = executor.submit(draw_power,CH1_power_filt_rx)
+        # graph_fft = executor.submit(draw_power,CH1_power_filt_rx)
 
         
-        time.sleep(2)
+        # time.sleep(2)
         
-        filter_data = executor.submit(filt_data,a_lowpass,b_lowpass,CH1_volts_rx,CH1_volts_filt_tx,CH1_filt_for_fft_tx)
+        # filter_data = executor.submit(filt_data,a_lowpass,b_lowpass,CH1_volts_rx,CH1_volts_filt_tx,CH1_filt_for_fft_tx)
 
-        send = executor.submit(send_data,volts,CH1_volts_tx,CH1_v_tx,csv_raw_tx)
+        # send = executor.submit(send_data,volts,CH1_volts_tx,CH1_v_tx,csv_raw_tx)
         # send = executor.submit(read_UART,CH1_volts_tx,CH1_v_tx,csv_raw_tx)
         # uart = executor.submit(read_UART)
-        save_in_csv = executor.submit(csv_save,csv_raw_rx)
-        filt_power = executor.submit(filt_and_interpolate,a_smooth,b_smooth,1,b_int,fft_out_rx,CH1_power_filt_tx)
+        # save_in_csv = executor.submit(csv_save,csv_raw_rx)
+        # filt_power = executor.submit(filt_and_interpolate,a_smooth,b_smooth,1,b_int,fft_out_rx,CH1_power_filt_tx)
