@@ -23,7 +23,7 @@ def current_timestamp():
     timestamp = now.strftime("%Y-%m-%d %H_%M_%S")
     return timestamp
 
-def read_UART(CH1_out1, CH1_out2, CH2_out1):
+def read_UART(CH1_out1, CH1_out2, CH2_out1, CH2_out2):
 # def read_UART():
     """
     Reads data coming in from UART connection and outputs the unfiltered 
@@ -55,6 +55,7 @@ def read_UART(CH1_out1, CH1_out2, CH2_out1):
             # if channel == 16:
             else:
                 CH2_out1.send(volts)
+                CH2_out2.send(volts)
                 # print(channel)
             #     CH2_out2.send(volts)
                 # print(volts)
@@ -111,24 +112,31 @@ def filter(data,a,b,z):
     """
     return scipy.signal.lfilter(b,a,data,zi=z)
 
-
-# def filt_data(a,b,q_in,q_out,q_out2):
-# def filt_data(a,b,CH1_in,CH1_out,CH1_out2):
-def filt_data(a,b,CH1_in,CH1_out,CH1_out2):
+def filt_data(a,b,CH1_in,CH1_out,CH1_out2,CH2_in,CH2_out,CH2_out2):
     """
     Filters incoming data according to a and b coefficients.
     q_out - filtered volts for graphing
     q_out2 - filtered volts for power calculations
     """
-    z = [0]*(len(b)-1)
-    x = 0
-    while x != STOP:
-        val,z = filter([x],a,b,z)
-        CH1_out.send(val[0])
-        CH1_out2.send(val[0])
-        # CH1_out2.send(val[0])
+    z_1 = [0]*(len(b)-1)
+    x_1 = 0
+
+    z_2 = [0]*(len(b)-1)
+    x_2 = 0
+    while x_1 != STOP:
+        val_1,z_1 = filter([x_1],a,b,z_1)
+        CH1_out.send(val_1[0])
+        CH1_out2.send(val_1[0])
+
+        val_2,z_2 = filter([x_2],a,b,z_2)
+        CH2_out.send(val_2[0])
+        CH2_out2.send(val_2[0])
+
         wait_while_empty(CH1_in)
-        x = CH1_in.recv()
+        x_1 = CH1_in.recv()
+
+        wait_while_empty(CH2_in)
+        x_2 = CH2_in.recv()
     CH1_out.send(STOP)
     # CH1_out2.send(STOP)
 
@@ -180,7 +188,7 @@ def wait_while_empty(q):
         pass
     return
 
-def calculate_powers(CH1_in, out,t_window,fs):
+def calculate_powers(CH1_in, CH2_in, out,t_window,fs):
     """
     Performs Short Time Fourier Transform and power calculations for frequency bands
     """
@@ -189,7 +197,7 @@ def calculate_powers(CH1_in, out,t_window,fs):
     
     # Frequency Bands
     alpha_range = [8,12]
-    beta_range = [12,30]
+    beta_range = [12,29]
     theta_range = [4,8]
 
     if (n_window:=int(t_window*fs))%2:
@@ -200,6 +208,9 @@ def calculate_powers(CH1_in, out,t_window,fs):
 
     data_buffer = []
     read_val = 0
+
+    data_buffer2 = []
+    read_val2 = 0
 
     size = n_window#2 ** round(math.log(NSAMP,2))
     window = np.hanning(size)
@@ -214,38 +225,63 @@ def calculate_powers(CH1_in, out,t_window,fs):
     i_end = i_begin + n_window
     ffts_ch1 = []
     ffts_offset_ch1 = [0]*n_window
+    ffts_ch2 = []
+    ffts_offset_ch2 = [0]*n_window
+    
     count = 0
     
     # fill up buffer for one window length
-    while len(data_buffer)<n_window-1:
-        if CH1_in.poll() is True:
-            read_val = CH1_in.recv()
-            data_buffer.append(read_val)
+    while (len(data_buffer)<n_window-1) and (len(data_buffer2)<n_window-1):
+        if (len(data_buffer)<n_window-1):
+            if CH1_in.poll() is True:
+                read_val = CH1_in.recv()
+                data_buffer.append(read_val)
+        if (len(data_buffer2)<n_window-1):
+            if CH2_in.poll() is True:
+                read_val2 = CH2_in.recv()
+                data_buffer2.append(read_val2)
+    # while len(data_buffer2)<n_window-1:
+    #     if CH2_in.poll() is True:
+    #         read_val2 = CH2_in.recv()
+    #         data_buffer2.append(read_val2)
 
     wait_while_empty(CH1_in)
+    wait_while_empty(CH2_in)
     while (data_buffer[-1]!=STOP):
+        # wait_while_empty(CH1_in)
+        # wait_while_empty(CH2_in)
         data_buffer.append(CH1_in.recv())
+        data_buffer2.append(CH2_in.recv())
         if count%n_overlap == 0: #ready for next block
             windowed_data_ch1 = np.multiply(window,data_buffer[i_begin:i_end])
+            windowed_data_ch2 = np.multiply(window,data_buffer2[i_begin:i_end])
             if not count%2: #ffts_block - count is even
                 ffts_ch1 = fft_of_block(windowed_data_ch1,size)
+                ffts_ch2 = fft_of_block(windowed_data_ch2,size)
                 power_block_ch1 = np.square(np.add(ffts_ch1[0:n_overlap],ffts_offset_ch1[n_overlap::]))
+                power_block_ch2 = np.square(np.add(ffts_ch2[0:n_overlap],ffts_offset_ch2[n_overlap::]))
             else: #offset_block - count is odd
                 ffts_offset_ch1 = fft_of_block(windowed_data_ch1,size)
+                ffts_offset_ch2 = fft_of_block(windowed_data_ch2,size)
                 power_block_ch1 = np.square(np.add(ffts_offset_ch1[0:n_overlap],ffts_ch1[n_overlap::]))
+                power_block_ch2 = np.square(np.add(ffts_offset_ch2[0:n_overlap],ffts_ch2[n_overlap::]))
                 
                 data_buffer = data_buffer[i_begin:i_end]
+                data_buffer2 = data_buffer2[i_begin:i_end]
                 count = 0
                 i_begin = 0
                 i_end = i_begin + n_window
             
-            alpha_power = np.sum(power_block_ch1[alpha_index[0]:alpha_index[1]+1])
-            beta_power = np.sum(power_block_ch1[beta_index[0]:beta_index[1]+1])
-            theta_power = np.sum(power_block_ch1[theta_index[0]:theta_index[1]+1])
-            tot_power = np.sum(power_block_ch1[eeg_index[0]:eeg_index[1]+1])
+            alpha_power = np.sum(power_block_ch1[alpha_index[0]:alpha_index[1]+1]) + np.sum(power_block_ch2[alpha_index[0]:alpha_index[1]+1])
+
+            beta_power = np.sum(power_block_ch1[beta_index[0]:beta_index[1]+1]) + np.sum(power_block_ch2[beta_index[0]:beta_index[1]+1])
+
+            theta_power = np.sum(power_block_ch1[theta_index[0]:theta_index[1]+1]) + np.sum(power_block_ch2[theta_index[0]:theta_index[1]+1])
+
+            tot_power = np.sum(power_block_ch1[eeg_index[0]:eeg_index[1]+1]) + np.sum(power_block_ch2[eeg_index[0]:eeg_index[1]+1])
 
             denominator = tot_power
-            out.send([alpha_power/denominator,beta_power/denominator,theta_power/denominator])
+            out.send([theta_power/denominator,alpha_power/denominator,beta_power/denominator])
         i_begin +=1
         i_end +=1
         count += 1
@@ -260,7 +296,7 @@ def draw_signals(CH1_in,CH2_in,fs,f_refresh):
     samp_per_update = int(fs/f_refresh)
     fig, (ax1,ax2) = plt.subplots(2,1)
     # fig, ax1 = plt.subplots()
-    fig.set_figheight(3)
+    fig.set_figheight(5)
     fig.set_figwidth(10)
     # plt.grid()
     ax1.set_title('Channel 1')
@@ -297,7 +333,7 @@ def draw_power_bars(q_in): # bar graph
     colors = ['lightsteelblue','#8f99fb','salmon']
     # bar_positions = [0]
     bars = ax1.bar(bar_positions,[0]*len(bar_positions),color=colors)
-    labels = ['alpha', 'beta','theta']
+    labels = ['theta', 'alpha','beta']
     # labels = ['alpha']
     ax1.set_xticks(bar_positions)
     ax1.set_xticklabels(labels)
@@ -314,16 +350,13 @@ def draw_power_bars(q_in): # bar graph
     plt.show()
 
 def eat_pipe(*qin):
+    """
+    Flushes any unused pipes so that the program doesn't back up due to clogged pipes
+    """
     while True:
         for q in qin:
             if q.poll() is True:
                 a = q.recv()
-        # if q1.poll() is True:
-        #     a = q1.recv()
-        # if q2.poll() is True:
-        #     a = q2.recv()
-            # print(a)
-
 
 STOP = 400
 # fs = 333
@@ -334,8 +367,8 @@ NSAMP = int(fs * window_time)
 if __name__ == '__main__':
 
     # with np.load('40hz_lowpass_fs1k.npz') as data:
-    with np.load('40-55-333hz_lowpass.npz') as data:
-    # with np.load('566fs_lowpass.npz') as data:
+    # with np.load('40-55-333hz_lowpass.npz') as data:
+    with np.load('566fs_lowpass.npz') as data:
         ba_lowpass = data['ba']
 
     b_lowpass = []
@@ -376,7 +409,13 @@ if __name__ == '__main__':
 
     CH1_to_filt_rx, CH1_to_filt_tx = multiprocessing.Pipe()
     CH1_filtered_rx, CH1_filtered_tx = multiprocessing.Pipe()
+
+    CH2_to_filt_rx, CH2_to_filt_tx = multiprocessing.Pipe()
+    CH2_filtered_rx, CH2_filtered_tx = multiprocessing.Pipe()
+
     CH1_for_power_rx, CH1_for_power_tx = multiprocessing.Pipe()
+    CH2_for_power_rx, CH2_for_power_tx = multiprocessing.Pipe()
+
     power_calc_rx, power_calc_tx = multiprocessing.Pipe()
     power_filtered_rx, power_filtered_tx = multiprocessing.Pipe()
 
@@ -388,14 +427,14 @@ if __name__ == '__main__':
         # graph_power = executor.submit(draw_power,power_filtered_rx)
         # graph_power = executor.submit(draw_power,power_calc_rx)
         time.sleep(4)
-        graph_signals = executor.submit(draw_signals,CH1_filtered_rx,CH2_rx,fs,60)
-        filter_data = executor.submit(filt_data,a_lowpass,b_lowpass,CH1_to_filt_rx,CH1_filtered_tx,CH1_for_power_tx)
+        graph_signals = executor.submit(draw_signals,CH1_filtered_rx,CH2_filtered_rx,fs,60)
+        filter_data = executor.submit(filt_data,a_lowpass,b_lowpass,CH1_to_filt_rx,CH1_filtered_tx,CH1_for_power_tx,CH2_to_filt_rx,CH2_filtered_tx,CH2_for_power_tx)
 
-        power_calc = executor.submit(calculate_powers,CH1_for_power_rx,power_calc_tx,1,fs)
+        power_calc = executor.submit(calculate_powers,CH1_for_power_rx, CH2_for_power_rx, power_calc_tx,1,fs)
         filt_power = executor.submit(filt_and_interpolate,a_smooth,b_smooth,a_int,b_int,power_calc_rx,power_filtered_tx)
 
-        eat = executor.submit(eat_pipe,CH1_rx)#,power_calc_rx)
-        send_signals = executor.submit(read_UART,CH1_tx,CH1_to_filt_tx,CH2_tx)
+        eat = executor.submit(eat_pipe,CH1_rx,CH2_rx)#,CH2_for_power_rx)#,power_calc_rx)
+        send_signals = executor.submit(read_UART,CH1_tx,CH1_to_filt_tx,CH2_tx,CH2_to_filt_tx)
         # send_signals = executor.submit(send_data,volts,CH1_tx,CH1_to_filt_tx,CH2_tx)
         time.sleep(3)
 
