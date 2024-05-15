@@ -38,11 +38,11 @@ def draw_rec(rec):
     mainCanvas.create_rectangle(rec.x0, rec.y0, rec.x1, height/2)
 
 def update_rec(rec):
-    mainCanvas.create_rectangle(rec.x0, rec.y0, rec.x1 ,0,fill = "white", outline= "white")
+    mainCanvas.create_rectangle(rec.x0, rec.y0, rec.x1 ,0,fill = "black", outline= "white")
     mainCanvas.create_rectangle(rec.x0, rec.y0, rec.x1, rec.height)
 
 def leftClick(event):
-    mainCanvas.create_rectangle(0,0,400,500, fill = 'white')
+    mainCanvas.create_rectangle(0,0,400,500, fill = 'black')
     left_bar.update_height(250)
     right_bar.update_height(250)
     draw_rec(right_bar)
