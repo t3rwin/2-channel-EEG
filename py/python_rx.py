@@ -12,7 +12,7 @@ def Port_Init(serialInst):
     # val = input("Select Port: COM")
 
     # portVar = "/dev/cu.usbmodem1203"
-    portVar = "/dev/cu.usbmodem1403"
+    portVar = "/dev/cu.usbmodem1103"
     # for x in range(0,len(portsList)):
     #     if portsList[x].startswith("COM" + str(val)):
     #         portVar = "COM" + str(val)

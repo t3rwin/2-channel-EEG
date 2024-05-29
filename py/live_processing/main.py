@@ -10,7 +10,7 @@ import multiprocessing
 from scipy.fft import fft,fftfreq
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
-
+import os
 import sys
 sys.path.append('../')
 import python_rx as prx
@@ -23,7 +23,33 @@ def current_timestamp():
     timestamp = now.strftime("%Y-%m-%d %H_%M_%S")
     return timestamp
 
-def read_UART(CH1_out1, CH1_out2, CH2_out1, CH2_out2):
+def send_data(volts, volts2, CH1_out1, CH1_out2, CH2_out1, CH2_out2, CH1_volts_raw_csv,CH2_volts_raw_csv):
+    """
+    Saves data sample by sample onto the output queue. Includes a delay to simulate sampling rate.
+    Run in a parallel process. 
+    Inputs:
+        volts   - pre-recorded data list
+    Outputs:
+        q_out1 - Queue for filter function
+        q_out2     - Queue for raw volts graphing function
+    """
+    # time.sleep(2)
+    for i, v in enumerate(volts):
+        # CH1_out1.send(v)
+        CH1_out2.send(v)
+        # CH2_out1.send(v)
+        CH2_out2.send(volts2[i])
+        CH1_volts_raw_csv.send(v)
+        CH2_volts_raw_csv.send(volts2[i])
+        time.sleep(.0017)
+        # time.sleep(1)
+        # print(v)
+        # time.sleep(1)
+    # q_out.send(STOP)
+    print("STOP")
+
+# def read_UART(CH1_out1, CH1_out2, CH2_out1, CH2_out2):
+def read_UART(CH1_out1, CH1_out2, CH2_out1, CH2_out2, CH1_volts_raw_csv,CH2_volts_raw_csv):
 # def read_UART():
     """
     Reads data coming in from UART connection and outputs the unfiltered 
@@ -48,56 +74,66 @@ def read_UART(CH1_out1, CH1_out2, CH2_out1, CH2_out2):
             volts = ((val*2.4)/8388608)-1.65
             # print(channel,volts)
             if channel == 0:
-                CH1_out1.send(volts) # for raw
+                # CH1_out1.send(volts) # for raw
                 CH1_out2.send(volts)      # for filtered
+                CH1_volts_raw_csv.send(volts)
                 # CH1_out2.send(volts)
                 # CH1_out_csv.send(volts)
             # if channel == 16:
             else:
-                CH2_out1.send(volts)
+                # CH2_out1.send(volts)
                 CH2_out2.send(volts)
+                CH2_volts_raw_csv.send(volts)
                 # print(channel)
             #     CH2_out2.send(volts)
                 # print(volts)
             #reset read value memory
             packet = []
     
-def csv_save(raw_rx):
-    timestamp = current_timestamp()
-    file_path = f'./outputs/{timestamp}.csv'
+def csv_save_power(timestamp,window_time,q_powers):
+    file_path = f'./outputs/{timestamp}/powers_{timestamp}.csv'
+    lines = 0
+    header = ['time(s)','theta power','alpha power','beta power', 'total power']
 
-    wait_while_empty(raw_rx)
-    readval = raw_rx.recv()
+    while True:
+        wait_while_empty(q_powers)
+        powers = q_powers.recv()
+        with open(file_path,'a') as csv_file:
+            csv_writer = csv.writer(csv_file)
+            if lines == 0:
+                csv_writer.writerow(header)
+            csv_writer.writerow([str(round(lines*(window_time/2),3)),str(powers[0]),str(powers[1]),str(powers[2]),str(powers[3])])
+            lines = lines + 1
+
+def csv_save_volts(timestamp,fs,CH1_volts_raw,CH2_volts_raw,CH1_filt,CH2_filt):
+    file_path = f'./outputs/{timestamp}/volts_{timestamp}.csv'
+
+    # wait_while_empty(raw_rx)
+    # readval = raw_rx.recv()
     # print(readval)
-    while (readval:=raw_rx.recv()) != STOP:
-        # with open(file_path,'w',newline='') as csv_file:
-        #     csv_writer = csv.writer(csv_file)
-        #     csv_writer.writerow(readval)
-            # print(readval)
-        wait_while_empty(raw_rx)
-    print(f'Done writing to file {file_path}')
+    # while (readval:=raw_rx.recv()) != STOP:
+    lines = 0
+    header = ['time(s)','CH1 volts','CH2 volts','CH1 filtered','CH2 filtered']
+    while True:
+        wait_while_empty(CH1_volts_raw)
+        v1_r = CH1_volts_raw.recv()
+        wait_while_empty(CH2_volts_raw)
+        v2_r = CH2_volts_raw.recv()
 
-def send_data(volts, q1, q2, q3):
-    """
-    Saves data sample by sample onto the output queue. Includes a delay to simulate sampling rate.
-    Run in a parallel process. 
-    Inputs:
-        volts   - pre-recorded data list
-    Outputs:
-        q_out1 - Queue for filter function
-        q_out2     - Queue for raw volts graphing function
-    """
-    # time.sleep(2)
-    for v in volts:
-        q1.send(v)
-        q2.send(v)
-        q3.send(v)
-        time.sleep(.001)
-        # time.sleep(1)
-        # print(v)
-        # time.sleep(1)
-    # q_out.send(STOP)
-    print("STOP")
+        wait_while_empty(CH1_filt)
+        v1_f = CH1_filt.recv()
+        wait_while_empty(CH2_filt)
+        v2_f = CH2_filt.recv()
+
+        with open(file_path,'a') as csv_file:
+            csv_writer = csv.writer(csv_file)
+            if lines == 0:
+                csv_writer.writerow(header)
+            csv_writer.writerow([str(round(lines*(1/fs),5)),str(v1_r),str(v2_r),str(v1_f),str(v2_f)])
+            lines = lines + 1
+        # wait_while_empty(raw_rx)
+    # print(f'Done writing to file {file_path}')
+
 
 def filter(data,a,b,z):
     """
@@ -112,7 +148,7 @@ def filter(data,a,b,z):
     """
     return scipy.signal.lfilter(b,a,data,zi=z)
 
-def filt_data(a,b,CH1_in,CH1_out,CH1_out2,CH2_in,CH2_out,CH2_out2):
+def filt_data(a,b,CH1_in,CH1_out,CH1_out2,CH2_in,CH2_out,CH2_out2,CH1_out_csv, CH2_out_csv):
     """
     Filters incoming data according to a and b coefficients.
     q_out - filtered volts for graphing
@@ -127,10 +163,12 @@ def filt_data(a,b,CH1_in,CH1_out,CH1_out2,CH2_in,CH2_out,CH2_out2):
         val_1,z_1 = filter([x_1],a,b,z_1)
         CH1_out.send(val_1[0])
         CH1_out2.send(val_1[0])
+        CH1_out_csv.send(val_1[0])
 
         val_2,z_2 = filter([x_2],a,b,z_2)
         CH2_out.send(val_2[0])
         CH2_out2.send(val_2[0])
+        CH2_out_csv.send(val_2[0])
 
         wait_while_empty(CH1_in)
         x_1 = CH1_in.recv()
@@ -150,7 +188,7 @@ def filt_and_interpolate(a_smooth,b_smooth,a_int,b_int,q_in,q_out):
     smooth_z = np.zeros(shape=(len(x),len(b_smooth)-1))
     int_z= np.zeros(shape=(len(x),len(b_int)-1))
     # results = np.zeros(shape=(len(x),3))
-    results = [0,0,0] # for no interpolation
+    results = [0]*len(x)#[0,0,0] # for no interpolation
 
     while x != STOP:
         # q_out.send(x)
@@ -188,7 +226,7 @@ def wait_while_empty(q):
         pass
     return
 
-def calculate_powers(CH1_in, CH2_in, out,t_window,fs):
+def calculate_powers(CH1_in, CH2_in, out,t_window,fs,powers_csv):
     """
     Performs Short Time Fourier Transform and power calculations for frequency bands
     """
@@ -196,9 +234,14 @@ def calculate_powers(CH1_in, CH2_in, out,t_window,fs):
         return np.abs(np.array(fft(data,size))) 
     
     # Frequency Bands
-    alpha_range = [8,12]
-    beta_range = [12,29]
-    theta_range = [4,8]
+    theta_range = [4,8]  # 4hz
+    alpha_range = [8,12] # 4hz
+    beta_low = [12,15]   # 3hz
+    beta_mid = [15,20]   # 5hz
+    beta_high = [20,29]  # 9hz
+    beta_range = [12,29] # 17hz
+
+    
 
     if (n_window:=int(t_window*fs))%2:
         # ensures window size is even
@@ -219,6 +262,11 @@ def calculate_powers(CH1_in, CH2_in, out,t_window,fs):
     theta_index = [(np.abs(F - theta_range[0])).argmin(),(np.abs(F - theta_range[1])).argmin()]
     alpha_index = [(np.abs(F - alpha_range[0])).argmin(),(np.abs(F - alpha_range[1])).argmin()]
     beta_index = [(np.abs(F - beta_range[0])).argmin(),(np.abs(F - beta_range[1])).argmin()]
+    betalow_index = [(np.abs(F - beta_low[0])).argmin(),(np.abs(F - beta_low[1])).argmin()]
+    betamid_index = [(np.abs(F - beta_mid[0])).argmin(),(np.abs(F - beta_mid[1])).argmin()]
+    betahigh_index = [(np.abs(F - beta_high[0])).argmin(),(np.abs(F - beta_high[1])).argmin()]
+
+
     eeg_index = [(np.abs(F - theta_range[0])).argmin(),(np.abs(F - beta_range[1])).argmin()]
 
     i_begin = 0
@@ -276,12 +324,20 @@ def calculate_powers(CH1_in, CH2_in, out,t_window,fs):
 
             beta_power = np.sum(power_block_ch1[beta_index[0]:beta_index[1]+1]) + np.sum(power_block_ch2[beta_index[0]:beta_index[1]+1])
 
+            beta_power_low = np.sum(power_block_ch1[betalow_index[0]:betalow_index[1]+1]) + np.sum(power_block_ch2[betalow_index[0]:betalow_index[1]+1])
+
+            beta_power_mid = np.sum(power_block_ch1[betamid_index[0]:betamid_index[1]+1]) + np.sum(power_block_ch2[betamid_index[0]:betamid_index[1]+1])
+
+            beta_power_high = np.sum(power_block_ch1[betahigh_index[0]:betahigh_index[1]+1]) + np.sum(power_block_ch2[betahigh_index[0]:betahigh_index[1]+1])
+
             theta_power = np.sum(power_block_ch1[theta_index[0]:theta_index[1]+1]) + np.sum(power_block_ch2[theta_index[0]:theta_index[1]+1])
 
             tot_power = np.sum(power_block_ch1[eeg_index[0]:eeg_index[1]+1]) + np.sum(power_block_ch2[eeg_index[0]:eeg_index[1]+1])
 
             denominator = tot_power
-            out.send([theta_power/denominator,alpha_power/denominator,beta_power/denominator])
+            out.send([theta_power/denominator,alpha_power/denominator,beta_power_high/denominator])
+            # out.send([theta_power/denominator,alpha_power/denominator,beta_power_low/denominator,beta_power_mid/denominator,beta_power_high/denominator])
+            # powers_csv.send([theta_power,alpha_power,beta_power,tot_power])
         i_begin +=1
         i_end +=1
         count += 1
@@ -294,12 +350,15 @@ t0 = 0
 def draw_signals(CH1_in,CH2_in,fs,f_refresh): 
     # CH2_in = 0
     samp_per_update = int(fs/f_refresh)
+    # fig, (ax1,ax2) = plt.subplots(2,1, sharex=True,sharey=True)
     fig, (ax1,ax2) = plt.subplots(2,1)
     # fig, ax1 = plt.subplots()
     fig.set_figheight(5)
     fig.set_figwidth(10)
+    fig.text(0.5, 0.02, 'Seconds', ha='center')
+    fig.text(0.08, 0.5, 'Volts', va='center', rotation='vertical')
     # plt.grid()
-    ax1.set_title('Channel 1')
+    ax1.set_title('Channel 1',)
     ax2.set_title('Channel 2')
     scope = Scope_Signal(fig,ax1,ax2,CH1_in,CH2_in,samp_per_update)
     ani = animation.FuncAnimation(fig, scope.update,
@@ -329,12 +388,16 @@ def draw_power_bars(q_in): # bar graph
     fig.set_figheight(4)
     fig.set_figwidth(4)
     ax1.set_ylim(0,1)
-    bar_positions = [0,1,2]
+    # bar_positions = [0,1,2,3,4]
+    # bar_positions = [0,1,2]
+    # labels = ['theta', 'alpha','beta']
+    # labels = ['theta','alpha','low beta','mid beta','high beta']
+    labels = ['theta','alpha','beta high']#,'low beta','mid beta','high beta']
+    bar_positions = [i for i in range(len(labels))]
     colors = ['lightsteelblue','#8f99fb','salmon']
     # bar_positions = [0]
     bars = ax1.bar(bar_positions,[0]*len(bar_positions),color=colors)
-    labels = ['theta', 'alpha','beta']
-    # labels = ['alpha']
+
     ax1.set_xticks(bar_positions)
     ax1.set_xticklabels(labels)
     # ax1.set_facecolor('tab:gray')
@@ -346,7 +409,7 @@ def draw_power_bars(q_in): # bar graph
         return bars
     
     ani = animation.FuncAnimation(fig, update,
-                                blit=True,cache_frame_data=False, save_count=0,interval=160)
+                                blit=True,cache_frame_data=False, save_count=0,interval=160)#160 
     plt.show()
 
 def eat_pipe(*qin):
@@ -365,7 +428,6 @@ fs = 566
 window_time = 1
 NSAMP = int(fs * window_time)
 if __name__ == '__main__':
-
     # with np.load('40hz_lowpass_fs1k.npz') as data:
     # with np.load('40-55-333hz_lowpass.npz') as data:
     with np.load('566fs_lowpass.npz') as data:
@@ -389,11 +451,12 @@ if __name__ == '__main__':
     # data = pandas.read_csv('data_inputs/1open-4reading.csv')
     # data = pandas.read_csv('data_inputs/1open-4reading-300.csv')
     data = pandas.read_csv('data_inputs/1open-1closed-1open-2closedmusicrelax.csv')
-    # volts = data['Channel 1 (V)']
-    # volts = data['0.026325']
     volts = data['0.034611']
-    # volts = volts[0:(fs*10)]
 
+    data_demo = pandas.read_csv('data_inputs/demo.csv')
+    demo_ch1 = data_demo['CH1 volts']
+    demo_ch2 = data_demo['CH2 volts']
+    print(demo_ch1[0])
     print('starting')
 
     # CH1_power_filt_rx, CH1_power_filt_tx = multiprocessing.Pipe()
@@ -404,8 +467,8 @@ if __name__ == '__main__':
     # fft_out_rx, fft_out_tx = multiprocessing.Pipe()
     # csv_raw_rx, csv_raw_tx = multiprocessing.Pipe()
 
-    CH1_rx, CH1_tx = multiprocessing.Pipe()
-    CH2_rx, CH2_tx = multiprocessing.Pipe()
+    CH1_rx, CH1_tx = [0,0]#multiprocessing.Pipe()
+    CH2_rx, CH2_tx = [0,0]#multiprocessing.Pipe()
 
     CH1_to_filt_rx, CH1_to_filt_tx = multiprocessing.Pipe()
     CH1_filtered_rx, CH1_filtered_tx = multiprocessing.Pipe()
@@ -419,24 +482,46 @@ if __name__ == '__main__':
     power_calc_rx, power_calc_tx = multiprocessing.Pipe()
     power_filtered_rx, power_filtered_tx = multiprocessing.Pipe()
 
+    CH1_volts_raw_csv_rx, CH1_volts_raw_csv_tx = multiprocessing.Pipe()
+    CH2_volts_raw_csv_rx, CH2_volts_raw_csv_tx = multiprocessing.Pipe()
+    CH1_filt_csv_rx, CH1_filt_csv_tx = multiprocessing.Pipe()
+    CH2_filt_csv_rx, CH2_filt_csv_tx = multiprocessing.Pipe()
+
+    powers_csv_rx, powers_csv_tx = [0,0]#multiprocessing.Pipe()
+
+    timestamp = current_timestamp()
+    save_path = f'./outputs/{timestamp}/'
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
     with ProcessPoolExecutor(max_workers=None) as executor:
 
-        
+        save_volts = executor.submit(csv_save_volts,timestamp,fs,           CH1_volts_raw_csv_rx,CH2_volts_raw_csv_rx,CH1_filt_csv_rx,CH2_filt_csv_rx)
+
+        # save_power = executor.submit(csv_save_power,timestamp,window_time,powers_csv_rx)
+
         graph_power = executor.submit(draw_power_bars,power_filtered_rx)
+
         # graph_power = executor.submit(draw_power_bars,power_calc_rx)
         # graph_power = executor.submit(draw_power,power_filtered_rx)
         # graph_power = executor.submit(draw_power,power_calc_rx)
         time.sleep(4)
-        graph_signals = executor.submit(draw_signals,CH1_filtered_rx,CH2_filtered_rx,fs,60)
-        filter_data = executor.submit(filt_data,a_lowpass,b_lowpass,CH1_to_filt_rx,CH1_filtered_tx,CH1_for_power_tx,CH2_to_filt_rx,CH2_filtered_tx,CH2_for_power_tx)
 
-        power_calc = executor.submit(calculate_powers,CH1_for_power_rx, CH2_for_power_rx, power_calc_tx,1,fs)
+        graph_signals = executor.submit(draw_signals,CH1_filtered_rx,CH2_filtered_rx,fs,60)
+
+        filter_data = executor.submit(filt_data,a_lowpass,b_lowpass,CH1_to_filt_rx,CH1_filtered_tx,CH1_for_power_tx,CH2_to_filt_rx,CH2_filtered_tx,CH2_for_power_tx,CH1_filt_csv_tx,CH2_filt_csv_tx)
+
+        power_calc = executor.submit(calculate_powers,CH1_for_power_rx, CH2_for_power_rx, power_calc_tx,1,fs,powers_csv_tx)
+        
         filt_power = executor.submit(filt_and_interpolate,a_smooth,b_smooth,a_int,b_int,power_calc_rx,power_filtered_tx)
 
-        eat = executor.submit(eat_pipe,CH1_rx,CH2_rx)#,CH2_for_power_rx)#,power_calc_rx)
-        send_signals = executor.submit(read_UART,CH1_tx,CH1_to_filt_tx,CH2_tx,CH2_to_filt_tx)
-        # send_signals = executor.submit(send_data,volts,CH1_tx,CH1_to_filt_tx,CH2_tx)
+        # eat = executor.submit(eat_pipe,CH1_rx,CH2_rx)#,powers_csv_rx,CH1_volts_raw_csv_rx,CH2_volts_raw_csv_rx,CH1_filt_csv_rx,CH2_filt_csv_rx)#,CH2_for_power_rx)#,power_calc_rx)
+
+
         time.sleep(3)
+        # send_signals = executor.submit(read_UART,CH1_tx,CH1_to_filt_tx,CH2_tx,CH2_to_filt_tx,CH1_volts_raw_csv_tx,CH2_volts_raw_csv_tx)
+        send_signals = executor.submit(send_data,demo_ch1,demo_ch2,CH1_tx,CH1_to_filt_tx,CH2_tx,CH2_to_filt_tx,CH1_volts_raw_csv_tx,CH2_volts_raw_csv_tx)
+        
 
 
         # graphing_done = False
