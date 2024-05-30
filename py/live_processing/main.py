@@ -4,6 +4,8 @@ import scipy
 import csv
 import pandas
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+mpl.rcParams['toolbar'] = 'None'
 import time
 from live_display import *
 import multiprocessing
@@ -179,12 +181,15 @@ def filt_data(a,b,CH1_in,CH1_out,CH1_out2,CH2_in,CH2_out,CH2_out2,CH1_out_csv, C
     # CH1_out2.send(STOP)
 
 
-def filt_and_interpolate(a_smooth,b_smooth,a_int,b_int,q_in,q_out):
+def filt_and_interpolate(a_smooth,b_smooth,a_int,b_int,
+                         q_in,q_in2,q_out,q_out2):
     """
     Used to smooth incoming power values, upsample, and interpolate
     """
     wait_while_empty(q_in)
-    x = q_in.recv()
+    in1 = q_in.recv()
+    in2 = q_in2.recv()
+    x = in1 + in2
     smooth_z = np.zeros(shape=(len(x),len(b_smooth)-1))
     int_z= np.zeros(shape=(len(x),len(b_int)-1))
     # results = np.zeros(shape=(len(x),3))
@@ -201,7 +206,10 @@ def filt_and_interpolate(a_smooth,b_smooth,a_int,b_int,q_in,q_out):
 
         # -------- no interpolation -------- #
             results[i] = smooth_val[0]
-            q_out.send(results)
+            # q_out.send(results)
+        q_out.send(results[:len(in1)])
+        q_out2.send(results[len(in1):])
+
             # print(f'smooth_val={smooth_val}')
             # print('')
         # q_out.send(results[:,0])
@@ -217,7 +225,10 @@ def filt_and_interpolate(a_smooth,b_smooth,a_int,b_int,q_in,q_out):
         #     q_out.send(results[:,i])
             # print(results)
 
-        x = q_in.recv()
+        # x = q_in.recv()
+        in1 = q_in.recv()
+        in2 = q_in2.recv()
+        x = in1 + in2
     q_out.send([STOP]*3)
     
 
@@ -226,7 +237,7 @@ def wait_while_empty(q):
         pass
     return
 
-def calculate_powers(CH1_in, CH2_in, out,t_window,fs,powers_csv):
+def calculate_powers(CH1_in, CH2_in,out,out2,t_window,fs,powers_csv):
     """
     Performs Short Time Fourier Transform and power calculations for frequency bands
     """
@@ -335,7 +346,10 @@ def calculate_powers(CH1_in, CH2_in, out,t_window,fs,powers_csv):
             tot_power = np.sum(power_block_ch1[eeg_index[0]:eeg_index[1]+1]) + np.sum(power_block_ch2[eeg_index[0]:eeg_index[1]+1])
 
             denominator = tot_power
-            out.send([theta_power/denominator,alpha_power/denominator,beta_power_high/denominator])
+            out.send([theta_power/denominator,alpha_power/denominator,beta_power_low/denominator,beta_power_mid/denominator,beta_power_high/denominator])
+            relaxation = ((alpha_power + beta_power_low)/(beta_power_mid+beta_power_high))/10
+            concentration = ((beta_power_mid + beta_power_high)/(alpha_power + beta_power_low)/2)
+            out2.send([relaxation,concentration])
             # out.send([theta_power/denominator,alpha_power/denominator,beta_power_low/denominator,beta_power_mid/denominator,beta_power_high/denominator])
             # powers_csv.send([theta_power,alpha_power,beta_power,tot_power])
         i_begin +=1
@@ -350,8 +364,9 @@ t0 = 0
 def draw_signals(CH1_in,CH2_in,fs,f_refresh): 
     # CH2_in = 0
     samp_per_update = int(fs/f_refresh)
-    # fig, (ax1,ax2) = plt.subplots(2,1, sharex=True,sharey=True)
-    fig, (ax1,ax2) = plt.subplots(2,1)
+    fig, (ax1,ax2) = plt.subplots(2,1, sharex=True,sharey=True)
+    # fig, (ax1,ax2) = plt.subplots(2,1)
+    fig.canvas.manager.set_window_title('Channel Data')
     # fig, ax1 = plt.subplots()
     fig.set_figheight(5)
     fig.set_figwidth(10)
@@ -383,16 +398,44 @@ def draw_power(q_in):
     ani = animation.FuncAnimation(fig, fft_display.update, blit=True,cache_frame_data=False, save_count=0,interval=160)#160
     plt.show()
 
+def draw_feedback_bars(q_in):
+    fig, ax1 = plt.subplots()
+    fig.set_figheight(4)
+    fig.set_figwidth(4)
+    fig.canvas.manager.set_window_title('Feedback')
+    ax1.set_ylim(0,1)
+    ax1.set_title('Feedback')
+    labels = ['relaxation','concentration']
+    bar_positions = [i for i in range(len(labels))]
+    colors = ['lightsteelblue','#8f99fb','salmon']
+    bars = ax1.bar(bar_positions,[0]*len(bar_positions),color=colors)
+    ax1.set_xticks(bar_positions)
+    ax1.set_xticklabels(labels)
+
+    def update(x):
+        y = q_in.recv()
+        for count, bar in enumerate(bars):
+            bar.set_height(y[count])
+        return bars
+
+    ani = animation.FuncAnimation(fig, update,
+                                blit=True,cache_frame_data=False, save_count=0,interval=160)#160 
+    plt.show()
+
 def draw_power_bars(q_in): # bar graph
     fig, ax1 = plt.subplots()
     fig.set_figheight(4)
     fig.set_figwidth(4)
+    fig.canvas.manager.set_window_title('Relative Power of EEG Bands')
     ax1.set_ylim(0,1)
+    ax1.set_xlabel('EEG Frequency Band')
+    ax1.set_ylabel('Relative Power')
     # bar_positions = [0,1,2,3,4]
     # bar_positions = [0,1,2]
     # labels = ['theta', 'alpha','beta']
-    # labels = ['theta','alpha','low beta','mid beta','high beta']
-    labels = ['theta','alpha','beta high']#,'low beta','mid beta','high beta']
+    labels = ['theta','alpha','low beta','mid beta','high beta']#,'relax','conc']
+    # labels=['theta','alpha','beta low','beta mid']
+    # labels = ['theta','alpha','beta high']#,'low beta','mid beta','high beta']
     bar_positions = [i for i in range(len(labels))]
     colors = ['lightsteelblue','#8f99fb','salmon']
     # bar_positions = [0]
@@ -403,9 +446,13 @@ def draw_power_bars(q_in): # bar graph
     # ax1.set_facecolor('tab:gray')
     def update(x):
         y = q_in.recv()
-        # bars[0].set_height(y[0])
+        # y2 = q_in2.recv()
+
         for count, bar in enumerate(bars):
+            # if count < len(y):
             bar.set_height(y[count])
+            # else:
+                # bar.set_height(y2[count-len(y)])
         return bars
     
     ani = animation.FuncAnimation(fig, update,
@@ -456,7 +503,6 @@ if __name__ == '__main__':
     data_demo = pandas.read_csv('data_inputs/demo.csv')
     demo_ch1 = data_demo['CH1 volts']
     demo_ch2 = data_demo['CH2 volts']
-    print(demo_ch1[0])
     print('starting')
 
     # CH1_power_filt_rx, CH1_power_filt_tx = multiprocessing.Pipe()
@@ -480,7 +526,10 @@ if __name__ == '__main__':
     CH2_for_power_rx, CH2_for_power_tx = multiprocessing.Pipe()
 
     power_calc_rx, power_calc_tx = multiprocessing.Pipe()
+    power_calc2_rx, power_calc2_tx = multiprocessing.Pipe()
+
     power_filtered_rx, power_filtered_tx = multiprocessing.Pipe()
+    power_filtered2_rx, power_filtered2_tx = multiprocessing.Pipe()
 
     CH1_volts_raw_csv_rx, CH1_volts_raw_csv_tx = multiprocessing.Pipe()
     CH2_volts_raw_csv_rx, CH2_volts_raw_csv_tx = multiprocessing.Pipe()
@@ -497,28 +546,30 @@ if __name__ == '__main__':
     with ProcessPoolExecutor(max_workers=None) as executor:
 
         save_volts = executor.submit(csv_save_volts,timestamp,fs,           CH1_volts_raw_csv_rx,CH2_volts_raw_csv_rx,CH1_filt_csv_rx,CH2_filt_csv_rx)
-
+        print('.')
         # save_power = executor.submit(csv_save_power,timestamp,window_time,powers_csv_rx)
 
         graph_power = executor.submit(draw_power_bars,power_filtered_rx)
-
+        graph_feedback = executor.submit(draw_feedback_bars,power_filtered2_rx)
+        print('.')
         # graph_power = executor.submit(draw_power_bars,power_calc_rx)
         # graph_power = executor.submit(draw_power,power_filtered_rx)
         # graph_power = executor.submit(draw_power,power_calc_rx)
         time.sleep(4)
-
+        print('.')
         graph_signals = executor.submit(draw_signals,CH1_filtered_rx,CH2_filtered_rx,fs,60)
-
+        print('.')
         filter_data = executor.submit(filt_data,a_lowpass,b_lowpass,CH1_to_filt_rx,CH1_filtered_tx,CH1_for_power_tx,CH2_to_filt_rx,CH2_filtered_tx,CH2_for_power_tx,CH1_filt_csv_tx,CH2_filt_csv_tx)
-
-        power_calc = executor.submit(calculate_powers,CH1_for_power_rx, CH2_for_power_rx, power_calc_tx,1,fs,powers_csv_tx)
-        
-        filt_power = executor.submit(filt_and_interpolate,a_smooth,b_smooth,a_int,b_int,power_calc_rx,power_filtered_tx)
-
+        print('.')
+        power_calc = executor.submit(calculate_powers,CH1_for_power_rx, CH2_for_power_rx, power_calc_tx, power_calc2_tx,1,fs,powers_csv_tx)
+        print('.')
+        filt_power = executor.submit(filt_and_interpolate,a_smooth,b_smooth,a_int,b_int,power_calc_rx,power_calc2_rx,power_filtered_tx,power_filtered2_tx)
+        print('.')
         # eat = executor.submit(eat_pipe,CH1_rx,CH2_rx)#,powers_csv_rx,CH1_volts_raw_csv_rx,CH2_volts_raw_csv_rx,CH1_filt_csv_rx,CH2_filt_csv_rx)#,CH2_for_power_rx)#,power_calc_rx)
 
 
-        time.sleep(3)
+        time.sleep(5)
+        print('.')
         # send_signals = executor.submit(read_UART,CH1_tx,CH1_to_filt_tx,CH2_tx,CH2_to_filt_tx,CH1_volts_raw_csv_tx,CH2_volts_raw_csv_tx)
         send_signals = executor.submit(send_data,demo_ch1,demo_ch2,CH1_tx,CH1_to_filt_tx,CH2_tx,CH2_to_filt_tx,CH1_volts_raw_csv_tx,CH2_volts_raw_csv_tx)
         
