@@ -3,9 +3,6 @@ from numpy import load
 import scipy
 import csv
 import pandas
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-mpl.rcParams['toolbar'] = 'None'
 import time
 from live_display import *
 import multiprocessing
@@ -14,6 +11,10 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 import os
 import sys
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+mpl.rcParams['toolbar'] = 'None'
+
 sys.path.append('../')
 import python_rx as prx
 
@@ -27,7 +28,7 @@ def current_timestamp():
 
 def send_data(volts, volts2, CH1_out1, CH1_out2, CH2_out1, CH2_out2, CH1_volts_raw_csv,CH2_volts_raw_csv):
     """
-    Saves data sample by sample onto the output queue. Includes a delay to simulate sampling rate.
+    Saves data sample by sample onto the output queue. Includes a delay to simulate sampling rate. Used for testing
     Run in a parallel process. 
     Inputs:
         volts   - pre-recorded data list
@@ -44,15 +45,9 @@ def send_data(volts, volts2, CH1_out1, CH1_out2, CH2_out1, CH2_out2, CH1_volts_r
         CH1_volts_raw_csv.send(v)
         CH2_volts_raw_csv.send(volts2[i])
         time.sleep(.0017)
-        # time.sleep(1)
-        # print(v)
-        # time.sleep(1)
-    # q_out.send(STOP)
     print("STOP")
 
-# def read_UART(CH1_out1, CH1_out2, CH2_out1, CH2_out2):
 def read_UART(CH1_out1, CH1_out2, CH2_out1, CH2_out2, CH1_volts_raw_csv,CH2_volts_raw_csv):
-# def read_UART():
     """
     Reads data coming in from UART connection and outputs the unfiltered 
     data into q_out1, q_out2
@@ -60,35 +55,24 @@ def read_UART(CH1_out1, CH1_out2, CH2_out1, CH2_out2, CH1_volts_raw_csv,CH2_volt
     serialInst = prx.serial.Serial()
     prx.Port_Init(serialInst)
     packet = []
-    # for i in range(600):
-    #     q_out1.send(-1)
-    #     q_out2.send(-1)
-    # time.sleep(4)
-    while True: # probably need to change to while the usb port is open or something
+    while True: # Should change to while the usb port is open
         if (serialInst.inWaiting() > 0): 
             #add to data read
             packet.append(serialInst.read())
-            #once full number is recieved print the value in: original 3 byte array, 
-            #concatinated 6 digit hex, and decimal values
         if (len(packet) == 4):
             val = prx.byte2int(packet[1::])
             channel = int.from_bytes(packet[0], byteorder='big') #16 = ch 1
             volts = ((val*2.4)/8388608)-1.65
-            # print(channel,volts)
             if channel == 0:
                 # CH1_out1.send(volts) # for raw
                 CH1_out2.send(volts)      # for filtered
                 CH1_volts_raw_csv.send(volts)
                 # CH1_out2.send(volts)
                 # CH1_out_csv.send(volts)
-            # if channel == 16:
             else:
                 # CH2_out1.send(volts)
                 CH2_out2.send(volts)
                 CH2_volts_raw_csv.send(volts)
-                # print(channel)
-            #     CH2_out2.send(volts)
-                # print(volts)
             #reset read value memory
             packet = []
     
@@ -96,7 +80,6 @@ def csv_save_power(timestamp,window_time,q_powers):
     file_path = f'./outputs/{timestamp}/powers_{timestamp}.csv'
     lines = 0
     header = ['time(s)','theta power','alpha power','beta power', 'total power']
-
     while True:
         wait_while_empty(q_powers)
         powers = q_powers.recv()
@@ -109,11 +92,6 @@ def csv_save_power(timestamp,window_time,q_powers):
 
 def csv_save_volts(timestamp,fs,CH1_volts_raw,CH2_volts_raw,CH1_filt,CH2_filt):
     file_path = f'./outputs/{timestamp}/volts_{timestamp}.csv'
-
-    # wait_while_empty(raw_rx)
-    # readval = raw_rx.recv()
-    # print(readval)
-    # while (readval:=raw_rx.recv()) != STOP:
     lines = 0
     header = ['time(s)','CH1 volts','CH2 volts','CH1 filtered','CH2 filtered']
     while True:
@@ -133,9 +111,6 @@ def csv_save_volts(timestamp,fs,CH1_volts_raw,CH2_volts_raw,CH1_filt,CH2_filt):
                 csv_writer.writerow(header)
             csv_writer.writerow([str(round(lines*(1/fs),5)),str(v1_r),str(v2_r),str(v1_f),str(v2_f)])
             lines = lines + 1
-        # wait_while_empty(raw_rx)
-    # print(f'Done writing to file {file_path}')
-
 
 def filter(data,a,b,z):
     """
